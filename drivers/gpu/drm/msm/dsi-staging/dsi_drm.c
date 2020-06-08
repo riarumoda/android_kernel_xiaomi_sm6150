@@ -15,6 +15,8 @@
 
 
 #define pr_fmt(fmt)	"dsi-drm:[%s] " fmt, __func__
+#include <linux/msm_drm_notify.h>
+
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_atomic.h>
 #include <linux/notifier.h>
@@ -189,6 +191,7 @@ static void dsi_bridge_pre_enable(struct drm_bridge *bridge)
 	struct dsi_bridge *c_bridge = to_dsi_bridge(bridge);
 	struct drm_device *dev = bridge->dev;
 	int event = 0;
+	int power_mode;
 
 	if (dev->doze_state == MSM_DRM_BLANK_POWERDOWN) {
 		dev->doze_state = MSM_DRM_BLANK_UNBLANK;
@@ -208,6 +211,11 @@ static void dsi_bridge_pre_enable(struct drm_bridge *bridge)
 		pr_err("Incorrect bridge details\n");
 		return;
 	}
+
+	power_mode = sde_connector_get_lp(c_bridge->display->drm_conn);
+	g_notify_data.data = &power_mode;
+	g_notify_data.id = MSM_DRM_PRIMARY_DISPLAY;
+	msm_drm_notifier_call_chain(MSM_DRM_EARLY_EVENT_BLANK, &g_notify_data);
 
 	/* By this point mode should have been validated through mode_fixup */
 	rc = dsi_display_set_mode(c_bridge->display,
@@ -265,6 +273,8 @@ static void dsi_bridge_pre_enable(struct drm_bridge *bridge)
 	msm_drm_notifier_call_chain(MSM_DRM_EVENT_BLANK, &g_notify_data);
 
 	SDE_ATRACE_END("dsi_display_enable");
+
+	msm_drm_notifier_call_chain(MSM_DRM_EVENT_BLANK, &g_notify_data);
 
 	rc = dsi_display_splash_res_cleanup(c_bridge->display);
 	if (rc)
@@ -500,6 +510,7 @@ static void dsi_bridge_post_disable(struct drm_bridge *bridge)
 	struct dsi_bridge *c_bridge = to_dsi_bridge(bridge);
 	struct drm_device *dev = bridge->dev;
 	int event = 0;
+	int power_mode;
 
 	if (dev->doze_state == MSM_DRM_BLANK_UNBLANK) {
 		dev->doze_state = MSM_DRM_BLANK_POWERDOWN;
@@ -515,6 +526,9 @@ static void dsi_bridge_post_disable(struct drm_bridge *bridge)
 		return;
 	}
 
+	power_mode = sde_connector_get_lp(c_bridge->display->drm_conn);
+	g_notify_data.data = &power_mode;
+	g_notify_data.id = MSM_DRM_PRIMARY_DISPLAY;
 	msm_drm_notifier_call_chain(MSM_DRM_EARLY_EVENT_BLANK, &g_notify_data);
 
 	SDE_ATRACE_BEGIN("dsi_bridge_post_disable");
@@ -541,6 +555,8 @@ static void dsi_bridge_post_disable(struct drm_bridge *bridge)
 
 	if (c_bridge->display->is_prim_display)
 		atomic_set(&prim_panel_is_on, false);
+
+	msm_drm_notifier_call_chain(MSM_DRM_EVENT_BLANK, &g_notify_data);
 }
 
 static void prim_panel_off_delayed_work(struct work_struct *work)
