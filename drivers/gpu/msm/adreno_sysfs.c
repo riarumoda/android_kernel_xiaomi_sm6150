@@ -649,7 +649,6 @@ static ADRENO_SYSFS_BOOL(gpu_llc_slice_enable);
 static ADRENO_SYSFS_BOOL(gpuhtw_llc_slice_enable);
 
 static DEVICE_INT_ATTR(wake_nice, 0644, adreno_wake_nice);
-static DEVICE_INT_ATTR(wake_timeout, 0644, adreno_wake_timeout);
 
 static ADRENO_SYSFS_BOOL(sptp_pc);
 static ADRENO_SYSFS_BOOL(lm);
@@ -668,34 +667,33 @@ static ADRENO_SYSFS_U32(acd_num_levels);
 static ADRENO_SYSFS_U32(acd_enable_by_level);
 static ADRENO_SYSFS_U32(acd_data);
 
-static const struct attribute *_attr_list[] = {
-	&adreno_attr_ft_policy.attr.attr,
-	&adreno_attr_ft_pagefault_policy.attr.attr,
-	&adreno_attr_ft_long_ib_detect.attr.attr,
-	&adreno_attr_ft_hang_intr_status.attr.attr,
-	&dev_attr_wake_nice.attr.attr,
-	&dev_attr_wake_timeout.attr.attr,
-	&adreno_attr_sptp_pc.attr.attr,
-	&adreno_attr_lm.attr.attr,
-	&adreno_attr_preemption.attr.attr,
-	&adreno_attr_hwcg.attr.attr,
-	&adreno_attr_throttling.attr.attr,
-	&adreno_attr_gpu_llc_slice_enable.attr.attr,
-	&adreno_attr_gpuhtw_llc_slice_enable.attr.attr,
-	&adreno_attr_preempt_level.attr.attr,
-	&adreno_attr_usesgmem.attr.attr,
-	&adreno_attr_skipsaverestore.attr.attr,
-	&adreno_attr_ifpc.attr.attr,
-	&adreno_attr_ifpc_count.attr.attr,
-	&adreno_attr_preempt_count.attr.attr,
-	&adreno_attr_acd.attr.attr,
-	&adreno_attr_perfcounter.attr.attr,
-	&adreno_attr_acd_data_index.attr.attr,
-	&adreno_attr_acd_version.attr.attr,
-	&adreno_attr_acd_stride.attr.attr,
-	&adreno_attr_acd_num_levels.attr.attr,
-	&adreno_attr_acd_enable_by_level.attr.attr,
-	&adreno_attr_acd_data.attr.attr,
+static const struct device_attribute *_attr_list[] = {
+	&adreno_attr_ft_policy.attr,
+	&adreno_attr_ft_pagefault_policy.attr,
+	&adreno_attr_ft_long_ib_detect.attr,
+	&adreno_attr_ft_hang_intr_status.attr,
+	&dev_attr_wake_nice.attr,
+	&adreno_attr_sptp_pc.attr,
+	&adreno_attr_lm.attr,
+	&adreno_attr_preemption.attr,
+	&adreno_attr_hwcg.attr,
+	&adreno_attr_throttling.attr,
+	&adreno_attr_gpu_llc_slice_enable.attr,
+	&adreno_attr_gpuhtw_llc_slice_enable.attr,
+	&adreno_attr_preempt_level.attr,
+	&adreno_attr_usesgmem.attr,
+	&adreno_attr_skipsaverestore.attr,
+	&adreno_attr_ifpc.attr,
+	&adreno_attr_ifpc_count.attr,
+	&adreno_attr_preempt_count.attr,
+	&adreno_attr_acd.attr,
+	&adreno_attr_perfcounter.attr,
+	&adreno_attr_acd_data_index.attr,
+	&adreno_attr_acd_version.attr,
+	&adreno_attr_acd_stride.attr,
+	&adreno_attr_acd_num_levels.attr,
+	&adreno_attr_acd_enable_by_level.attr,
+	&adreno_attr_acd_data.attr,
 	NULL,
 };
 
