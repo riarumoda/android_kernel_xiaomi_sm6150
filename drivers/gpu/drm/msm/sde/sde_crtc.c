@@ -7230,8 +7230,7 @@ void sde_crtc_touch_notify(void)
 			break;
 		}
 
-		if (dsi_display && dsi_display->is_prim_display && dsi_display->panel
-			&& !dsi_display->panel->panel_max_frame_rate) {
+		if (dsi_display && dsi_display->panel && !dsi_display->panel->panel_max_frame_rate) {
 			if (dsi_display->panel->dfps_caps.smart_fps_support && fm_stat.enabled) {
 				dsi_display->panel->panel_max_frame_rate = true;
 				calc_fps(0, (int)true);
