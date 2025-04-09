@@ -53,11 +53,6 @@ enum dsi_backlight_type {
 	DSI_BACKLIGHT_MAX,
 };
 
-enum dsi_doze_mode_type {
-	DSI_DOZE_LPM = 0,
-	DSI_DOZE_HBM,
-};
-
 enum bl_update_flag {
 	BL_UPDATE_DELAY_UNTIL_FIRST_FRAME,
 	BL_UPDATE_NONE,
@@ -123,18 +118,9 @@ struct dsi_backlight_config {
 	u32 bl_level;
 	u32 bl_scale;
 	u32 bl_scale_ad;
-	u32 bl_doze_lpm;
-	u32 bl_doze_hbm;
 	bool bl_inverted_dbv;
 
 	int en_gpio;
-
-	bool dcs_type_ss_ea;
-	bool dcs_type_ss_eb;
-	bool xiaomi_f4_36_flag;
-	bool xiaomi_f4_41_flag;
-	bool bl_remap_flag;
-
 	/* PWM params */
 	struct pwm_device *pwm_bl;
 	bool pwm_enabled;
@@ -182,20 +168,6 @@ struct drm_panel_esd_config {
 	u32 groups;
 };
 
-#define BRIGHTNESS_ALPHA_PAIR_LEN 2
-struct brightness_alpha_pair {
-	u32 brightness;
-	u32 alpha;
-};
-
-struct dsi_read_config {
-	bool enabled;
-	struct dsi_panel_cmd_set read_cmd;
-	u32 cmds_rlen;
-	u32 valid_bits;
-	u8 rbuf[64];
-};
-
 struct dsi_panel {
 	const char *name;
 	const char *type;
@@ -230,10 +202,6 @@ struct dsi_panel {
 
 	struct dsi_parser_utils utils;
 
-#ifdef CONFIG_TOUCHSCREEN_TDDI_DBCLK
-	bool is_tddi_flag;
-#endif
-
 	bool lp11_init;
 	bool ulps_feature_enabled;
 	bool ulps_suspend_enabled;
@@ -250,14 +218,6 @@ struct dsi_panel {
 	bool sync_broadcast_en;
 	int power_mode;
 	enum dsi_panel_physical_type panel_type;
-
-	bool doze_enabled;
-	enum dsi_doze_mode_type doze_mode;
-
-	int hbm_mode;
-
-	struct brightness_alpha_pair *fod_dim_lut;
-	u32 fod_dim_lut_count;
 };
 
 static inline bool dsi_panel_ulps_feature_enabled(struct dsi_panel *panel)
@@ -320,11 +280,6 @@ int dsi_panel_get_phy_props(struct dsi_panel *panel,
 int dsi_panel_get_dfps_caps(struct dsi_panel *panel,
 			    struct dsi_dfps_capabilities *dfps_caps);
 
-#ifdef CONFIG_MACH_XIAOMI_SWEET
-void dsi_panel_gamma_mode_change(struct dsi_panel *panel,
-                        struct dsi_display_mode *adj_mode);
-#endif
-
 int dsi_panel_pre_prepare(struct dsi_panel *panel);
 
 int dsi_panel_set_lp1(struct dsi_panel *panel);
@@ -382,15 +337,5 @@ struct dsi_panel *dsi_panel_ext_bridge_get(struct device *parent,
 int dsi_panel_parse_esd_reg_read_configs(struct dsi_panel *panel);
 
 void dsi_panel_ext_bridge_put(struct dsi_panel *panel);
-
-int dsi_panel_set_doze_status(struct dsi_panel *panel, bool status);
-
-int dsi_panel_set_doze_mode(struct dsi_panel *panel, enum dsi_doze_mode_type mode);
-
-int dsi_panel_set_fod_hbm(struct dsi_panel *panel, bool status);
-
-u32 dsi_panel_get_fod_dim_alpha(struct dsi_panel *panel);
-
-int dsi_panel_apply_hbm_mode(struct dsi_panel *panel);
 
 #endif /* _DSI_PANEL_H_ */
