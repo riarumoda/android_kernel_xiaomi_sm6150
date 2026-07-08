@@ -1581,7 +1581,7 @@ int kgsl_pwrctrl_init_sysfs(struct kgsl_device *device)
 {
 	int i, ret;
 
-	ret = sysfs_create_files(&device->dev->kobj, pwrctrl_attr_list);
+	ret = sysfs_create_files(&device->dev->kobj, (const struct attribute **)pwrctrl_attr_list);
 	if (ret)
 		return ret;
 
@@ -1600,7 +1600,7 @@ int kgsl_pwrctrl_init_sysfs(struct kgsl_device *device)
 
 void kgsl_pwrctrl_uninit_sysfs(struct kgsl_device *device)
 {
-	sysfs_remove_files(&device->dev->kobj, pwrctrl_attr_list);
+	sysfs_remove_files(&device->dev->kobj, (const struct attribute **)pwrctrl_attr_list);
 }
 
 /*
