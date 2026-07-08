@@ -13,6 +13,7 @@ msm_drm-y := \
 	dp/dp_usbpd.o \
 	dp/dp_parser.o \
 	dp/dp_power.o \
+	xiaomi_frame_stat.o \
 	dp/dp_catalog.o \
 	dp/dp_catalog_v420.o \
 	dp/dp_catalog_v200.o \
@@ -56,8 +57,7 @@ msm_drm-y := \
 	sde_hdcp_2x.o
 
 msm_drm-$(CONFIG_DEBUG_FS) += sde_dbg.o \
-	sde_dbg_evtlog.o \
-	xiaomi_frame_stat.o
+	sde_dbg_evtlog.o
 
 msm_drm-$(CONFIG_DRM_MSM_HDMI) += hdmi/hdmi.o \
 	hdmi/hdmi_audio.o \

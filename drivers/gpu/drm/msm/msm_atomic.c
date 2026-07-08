@@ -20,6 +20,7 @@
 #include <linux/msm_drm_notify.h>
 #include <linux/notifier.h>
 #include <linux/pm_qos.h>
+#include <drm/drm_notifier.h>
 
 #include "msm_drv.h"
 #include "msm_kms.h"
@@ -43,6 +44,7 @@ struct msm_commit {
 };
 
 static BLOCKING_NOTIFIER_HEAD(msm_drm_notifier_list);
+static BLOCKING_NOTIFIER_HEAD(drm_notifier_list);
 
 /**
  * msm_drm_register_client - register a client notifier
@@ -84,6 +86,25 @@ int msm_drm_notifier_call_chain(unsigned long val, void *v)
 	return blocking_notifier_call_chain(&msm_drm_notifier_list, val,
 					    v);
 }
+EXPORT_SYMBOL(msm_drm_notifier_call_chain);
+
+int drm_register_client(struct notifier_block *nb)
+{
+	return blocking_notifier_chain_register(&drm_notifier_list, nb);
+}
+EXPORT_SYMBOL(drm_register_client);
+
+int drm_unregister_client(struct notifier_block *nb)
+{
+	return blocking_notifier_chain_unregister(&drm_notifier_list, nb);
+}
+EXPORT_SYMBOL(drm_unregister_client);
+
+int drm_notifier_call_chain(unsigned long val, void *v)
+{
+	return blocking_notifier_call_chain(&drm_notifier_list, val, v);
+}
+EXPORT_SYMBOL(drm_notifier_call_chain);
 
 /* block until specified crtcs are no longer pending update, and
  * atomically mark them as pending update
