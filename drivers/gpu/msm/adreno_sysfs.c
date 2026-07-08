@@ -828,7 +828,7 @@ void adreno_sysfs_close(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 
 	ppd_sysfs_close(adreno_dev);
-	sysfs_remove_files(&device->dev->kobj, _attr_list);
+	sysfs_remove_files(&device->dev->kobj, (const struct attribute **)_attr_list);
 }
 
 /**
@@ -843,7 +843,7 @@ int adreno_sysfs_init(struct adreno_device *adreno_dev)
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	int ret;
 
-	ret = sysfs_create_files(&device->dev->kobj, _attr_list);
+	ret = sysfs_create_files(&device->dev->kobj, (const struct attribute **)_attr_list);
 
 	/* Add the PPD directory and files */
 	if (ret == 0) {
