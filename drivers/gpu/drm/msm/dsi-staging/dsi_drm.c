@@ -16,6 +16,7 @@
 
 #define pr_fmt(fmt)	"dsi-drm:[%s] " fmt, __func__
 #include <drm/drm_atomic_helper.h>
+#include <linux/msm_drm_notify.h>
 #include <drm/drm_atomic.h>
 #include <drm/drm_notifier.h>
 #include <linux/notifier.h>
