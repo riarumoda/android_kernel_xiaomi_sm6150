@@ -46,7 +46,12 @@ static bool sched_boost_active;
 
 static struct delayed_work input_boost_rem;
 static u64 last_input_time;
+
+#ifdef CONFIG_MACH_XIAOMI_SWEET
+#define MIN_INPUT_INTERVAL (40 * USEC_PER_MSEC)
+#else
 #define MIN_INPUT_INTERVAL (150 * USEC_PER_MSEC)
+#endif
 
 static int set_input_boost_freq(const char *buf, const struct kernel_param *kp)
 {
