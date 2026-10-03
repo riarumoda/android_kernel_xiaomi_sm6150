@@ -2778,36 +2778,26 @@ static void gtp_set_gesture_work(struct work_struct *work)
 {
 	struct goodix_ts_core *core_data =
 		container_of(work, struct goodix_ts_core, gesture_work);
-	static int pre_fod_status;
+	bool fod_enabled = core_data->fod_status > 0 &&
+			core_data->fod_status != 100;
 
-	if(core_data->fod_status != -1 && core_data->fod_status != 100) {
-		if (core_data->fod_status == 0 && pre_fod_status == -1)
-			core_data->gesture_enabled &= ~(1 << 0);
-		else
-			core_data->gesture_enabled |= (1 << 0);
-	} else
+	if (fod_enabled)
+		core_data->gesture_enabled |= (1 << 0);
+	else
 		core_data->gesture_enabled &= ~(1 << 0);
 
-	if(core_data->double_wakeup)
+	if (core_data->double_wakeup)
 		core_data->gesture_enabled |= (1 << 1);
 	else
 		core_data->gesture_enabled &= ~(1 << 1);
 
-	if((core_data->fod_status != -1 && core_data->fod_status != 100 &&
-			core_data->fod_icon_status) || core_data->aod_status) {
-		if (core_data->fod_status == 0 && pre_fod_status == -1 &&
-				core_data->aod_status == 0)
-			core_data->gesture_enabled &= ~(1 << 2);
-		else
-			core_data->gesture_enabled |= (1 << 2);
-	} else
+	if ((fod_enabled && core_data->fod_icon_status) || core_data->aod_status)
+		core_data->gesture_enabled |= (1 << 2);
+	else
 		core_data->gesture_enabled &= ~(1 << 2);
 
-	ts_info("pre_fod_status:%d, set gesture_enabled:%d", pre_fod_status, core_data->gesture_enabled);
-
-	if (core_data->fod_status != pre_fod_status)
-		pre_fod_status = core_data->fod_status;
-
+	ts_info("fod_enabled:%d, set gesture_enabled:%d",
+		fod_enabled, core_data->gesture_enabled);
 
 	return;
 }
@@ -3293,7 +3283,7 @@ static int goodix_ts_probe(struct platform_device *pdev)
 	ts_info("init fod status in FAC.");
 	core_data->fod_status = 1;
 	core_data->gesture_enabled = 1;
-#elif CONFIG_TOUCHSCREEN_FOD
+#else
 	ts_info("init fod status in DEV.");
 	core_data->fod_status = -1;
 	core_data->fod_icon_status = 1;
