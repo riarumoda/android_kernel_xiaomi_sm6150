@@ -12,6 +12,7 @@
  */
 
 #include <linux/devfreq.h>
+#include <linux/math64.h>
 #include <linux/module.h>
 #include <linux/msm_adreno_devfreq.h>
 #include <linux/slab.h>
@@ -84,27 +85,35 @@ static int devfreq_gpubw_get_target(struct devfreq *df,
 	stats.private_data = &b;
 
 	result = df->profile->get_dev_status(df->dev.parent, &stats);
+	if (result)
+		return result;
 
 	*freq = stats.current_frequency;
+
+	if (!stats.total_time)
+		return 0;
+
+	level = devfreq_get_freq_level(df, stats.current_frequency);
+	if (level < 0)
+		return level;
 
 	priv->bus.total_time += stats.total_time;
 	priv->bus.gpu_time += stats.busy_time;
 	priv->bus.ram_time += b.ram_time;
 	priv->bus.ram_wait += b.ram_wait;
 
-	level = devfreq_get_freq_level(df, stats.current_frequency);
-
 	if (priv->bus.total_time < LONG_FLOOR)
 		return result;
 
-	norm_max_cycles = (unsigned int)(priv->bus.ram_time) /
-			(unsigned int) priv->bus.total_time;
-	norm_cycles = (unsigned int)(priv->bus.ram_time + priv->bus.ram_wait) /
-			(unsigned int) priv->bus.total_time;
-	wait_active_percent = (100 * (unsigned int)priv->bus.ram_wait) /
-			(unsigned int) priv->bus.ram_time;
-	gpu_percent = (100 * (unsigned int)priv->bus.gpu_time) /
-			(unsigned int) priv->bus.total_time;
+	norm_max_cycles = div64_u64(priv->bus.ram_time,
+				    priv->bus.total_time);
+	norm_cycles = div64_u64(priv->bus.ram_time + priv->bus.ram_wait,
+				priv->bus.total_time);
+	wait_active_percent = priv->bus.ram_time ?
+		div64_u64(100ULL * priv->bus.ram_wait,
+			  priv->bus.ram_time) : 0;
+	gpu_percent = div64_u64(100ULL * priv->bus.gpu_time,
+				priv->bus.total_time);
 
 	/*
 	 * If there's a new high watermark, update the cutoffs and send the
@@ -272,4 +281,3 @@ module_exit(devfreq_gpubw_exit);
 
 MODULE_DESCRIPTION("GPU bus bandwidth voting driver. Uses VBIF counters");
 MODULE_LICENSE("GPL v2");
-
