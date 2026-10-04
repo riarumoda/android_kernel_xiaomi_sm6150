@@ -158,7 +158,7 @@ struct scan_control {
  * From 0 .. 100.  Higher means more swappy.
  */
 #ifdef CONFIG_MACH_XIAOMI_SWEET
-int vm_swappiness = 120;
+int vm_swappiness = 100;
 #else
 int vm_swappiness = 60;
 #endif

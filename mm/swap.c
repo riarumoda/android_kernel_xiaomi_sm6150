@@ -1013,7 +1013,7 @@ void __init swap_setup(void)
 	unsigned long megs = totalram_pages >> (20 - PAGE_SHIFT);
 
 #ifdef CONFIG_MACH_XIAOMI_SWEET
-	page_cluster = 0;
+	page_cluster = 2;
 #else
 	/* Use a smaller cluster for small-memory machines */
 	if (megs < 16)
