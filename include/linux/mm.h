@@ -2862,7 +2862,7 @@ static inline void setup_nr_node_ids(void) {}
 
 extern int want_old_faultaround_pte;
 
-#ifdef CONFIG_PROCESS_RECLAIM
+#if defined(CONFIG_PROCESS_RECLAIM) || defined(CONFIG_RTMM)
 struct reclaim_param {
 	struct vm_area_struct *vma;
 	/* Number of pages scanned */
@@ -2872,8 +2872,16 @@ struct reclaim_param {
 	/* pages reclaimed */
 	int nr_reclaimed;
 };
+#ifdef CONFIG_PROCESS_RECLAIM
 extern struct reclaim_param reclaim_task_anon(struct task_struct *task,
 		int nr_to_reclaim);
+#endif
+extern int reclaim_pte_range(pmd_t *pmd, unsigned long addr,
+			     unsigned long end, struct mm_walk *walk);
+#endif
+
+#ifdef CONFIG_RTMM
+extern unsigned long reclaim_global(unsigned long nr_to_reclaim);
 #endif
 
 #endif /* __KERNEL__ */

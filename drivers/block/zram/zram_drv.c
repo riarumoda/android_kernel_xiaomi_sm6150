@@ -317,7 +317,7 @@ static ssize_t idle_store(struct device *dev,
 	return len;
 }
 
-#ifdef CONFIG_ZRAM_WRITEBACK
+#if defined(CONFIG_ZRAM_WRITEBACK) || defined(CONFIG_RTMM)
 static ssize_t writeback_limit_enable_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t len)
 {
@@ -1081,7 +1081,7 @@ static ssize_t mm_stat_show(struct device *dev,
 	return ret;
 }
 
-#ifdef CONFIG_ZRAM_WRITEBACK
+#if defined(CONFIG_ZRAM_WRITEBACK) || defined(CONFIG_RTMM)
 #define FOUR_K(x) ((x) * (1 << (PAGE_SHIFT - 12)))
 static ssize_t bd_stat_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -1121,7 +1121,7 @@ static ssize_t debug_stat_show(struct device *dev,
 
 static DEVICE_ATTR_RO(io_stat);
 static DEVICE_ATTR_RO(mm_stat);
-#ifdef CONFIG_ZRAM_WRITEBACK
+#if defined(CONFIG_ZRAM_WRITEBACK) || defined(CONFIG_RTMM)
 static DEVICE_ATTR_RO(bd_stat);
 #endif
 static DEVICE_ATTR_RO(debug_stat);
@@ -1833,7 +1833,7 @@ static DEVICE_ATTR_WO(mem_used_max);
 static DEVICE_ATTR_WO(idle);
 static DEVICE_ATTR_RW(max_comp_streams);
 static DEVICE_ATTR_RW(comp_algorithm);
-#ifdef CONFIG_ZRAM_WRITEBACK
+#if defined(CONFIG_ZRAM_WRITEBACK) || defined(CONFIG_RTMM)
 static DEVICE_ATTR_RW(backing_dev);
 static DEVICE_ATTR_WO(writeback);
 static DEVICE_ATTR_RW(writeback_limit);
@@ -1850,7 +1850,7 @@ static struct attribute *zram_disk_attrs[] = {
 	&dev_attr_idle.attr,
 	&dev_attr_max_comp_streams.attr,
 	&dev_attr_comp_algorithm.attr,
-#ifdef CONFIG_ZRAM_WRITEBACK
+#if defined(CONFIG_ZRAM_WRITEBACK) || defined(CONFIG_RTMM)
 	&dev_attr_backing_dev.attr,
 	&dev_attr_writeback.attr,
 	&dev_attr_writeback_limit.attr,
@@ -1858,7 +1858,7 @@ static struct attribute *zram_disk_attrs[] = {
 #endif
 	&dev_attr_io_stat.attr,
 	&dev_attr_mm_stat.attr,
-#ifdef CONFIG_ZRAM_WRITEBACK
+#if defined(CONFIG_ZRAM_WRITEBACK) || defined(CONFIG_RTMM)
 	&dev_attr_bd_stat.attr,
 #endif
 	&dev_attr_debug_stat.attr,
@@ -1894,7 +1894,7 @@ static int zram_add(void)
 	device_id = ret;
 
 	init_rwsem(&zram->init_lock);
-#ifdef CONFIG_ZRAM_WRITEBACK
+#if defined(CONFIG_ZRAM_WRITEBACK) || defined(CONFIG_RTMM)
 	spin_lock_init(&zram->wb_limit_lock);
 #endif
 	queue = blk_alloc_queue(GFP_KERNEL);
