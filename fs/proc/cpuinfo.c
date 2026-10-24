@@ -16,6 +16,26 @@ static int cpuinfo_open(struct inode *inode, struct file *file)
 	return seq_open(file, &cpuinfo_op);
 }
 
+#ifdef CONFIG_MACH_XIAOMI_SWEET
+static int cpumaxfreq_show(struct seq_file *m, void *v)
+{
+	seq_printf(m, "2.3\n");
+	return 0;
+}
+
+static int cpumaxfreq_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, cpumaxfreq_show, NULL);
+}
+
+static const struct file_operations proc_cpumaxfreq_operations = {
+	.open		= cpumaxfreq_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+#endif
+
 static const struct file_operations proc_cpuinfo_operations = {
 	.open		= cpuinfo_open,
 	.read		= seq_read,
@@ -26,6 +46,9 @@ static const struct file_operations proc_cpuinfo_operations = {
 static int __init proc_cpuinfo_init(void)
 {
 	proc_create("cpuinfo", 0, NULL, &proc_cpuinfo_operations);
+#ifdef CONFIG_MACH_XIAOMI_SWEET
+	proc_create("cpumaxfreq", 0444, NULL, &proc_cpumaxfreq_operations);
+#endif
 	return 0;
 }
 fs_initcall(proc_cpuinfo_init);
