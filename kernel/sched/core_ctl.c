@@ -1202,6 +1202,7 @@ static int core_ctl_isolation_dead_cpu(unsigned int cpu)
 
 /* ============================ init code ============================== */
 
+#ifdef CONFIG_SCHED_WALT
 static struct cluster_data *find_cluster_by_first_cpu(unsigned int first_cpu)
 {
 	unsigned int i;
@@ -1282,11 +1283,14 @@ static int cluster_init(const struct cpumask *mask)
 	kobject_init(&cluster->kobj, &ktype_core_ctl);
 	return kobject_add(&cluster->kobj, &dev->kobj, "core_ctl");
 }
+#endif
 
 static int __init core_ctl_init(void)
 {
+#ifdef CONFIG_SCHED_WALT
 	struct sched_cluster *cluster;
 	int ret;
+#endif
 
 	cpuhp_setup_state_nocalls(CPUHP_AP_ONLINE_DYN,
 			"core_ctl/isolation:online",
@@ -1296,11 +1300,13 @@ static int __init core_ctl_init(void)
 			"core_ctl/isolation:dead",
 			NULL, core_ctl_isolation_dead_cpu);
 
+#ifdef CONFIG_SCHED_WALT			
 	for_each_sched_cluster(cluster) {
 		ret = cluster_init(&cluster->cpus);
 		if (ret)
 			pr_warn("unable to create core ctl group: %d\n", ret);
 	}
+#endif
 
 	initialized = true;
 	return 0;
