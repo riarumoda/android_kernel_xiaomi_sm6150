@@ -1889,6 +1889,17 @@ static int gtx8_dump_data_prepare(struct gtx8_ts_test *ts_test)
 	struct goodix_ts_core *core_data;
 	core_data = (struct goodix_ts_core *)ts_test->ts;
 
+	if (!ts_test->test_params || !ts_test->orig_config) {
+		ts_err("%s: test memory not allocated\n", __func__);
+		return -EINVAL;
+	}
+
+	ret = gtx8_cache_origconfig(ts_test);
+	if (ret) {
+		ts_err("Failed cache origin config\n");
+		return ret;
+	}
+
 	/* init cmd*/
 	ret = gtx8_init_cmds(ts_test);
 	if (ret) {
@@ -3021,6 +3032,12 @@ int gtx8_dump_data(void *tsdev, char *buf, int *buf_size)
 	}
 	gts_test->ts = core_data;
 
+	ret = alloc_mem_for_test(gts_test);
+	if (ret) {
+		ts_err("%s: Failed alloc mem for test\n", __func__);
+		goto exit_finish;
+	}
+
 	ret = gtx8_dump_data_prepare(gts_test);
 	if (ret) {
 		ts_err("%s: Failed dump data prepare\n", __func__);
@@ -3079,10 +3096,11 @@ int gtx8_dump_data(void *tsdev, char *buf, int *buf_size)
 
 exit_finish:
 	if (gts_test) {
+		free_mem_for_test(gts_test);
 		kfree(gts_test);
 		gts_test = NULL;
 	}
-	return 0;
+	return ret;
 }
 
 char *gtx8_strncat(char *dest, char *src, size_t dest_size)
