@@ -212,6 +212,15 @@ static void dsi_bridge_pre_enable(struct drm_bridge *bridge)
 		return;
 	}
 
+	if (bridge->encoder->crtc->state->active_changed)
+		atomic_set(&c_bridge->display->panel->esd_recovery_pending, 0);
+
+	if (c_bridge->display->is_prim_display && atomic_read(&prim_panel_is_on)) {
+		cancel_delayed_work_sync(&prim_panel_work);
+		__pm_relax(&prim_panel_wakelock);
+		return;
+	}
+
 	power_mode = sde_connector_get_lp(c_bridge->display->drm_conn);
 	g_notify_data.data = &power_mode;
 	g_notify_data.id = MSM_DRM_PRIMARY_DISPLAY;
