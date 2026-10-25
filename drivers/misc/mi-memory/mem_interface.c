@@ -66,7 +66,10 @@ int ufs_get_string_desc(void *buf, int size, enum device_desc_param pname, bool 
 	ret = ufshcd_read_string_desc(hba, index, desc_buf, desc_len, ascii_std);
 	if (ret < 0)
 		goto out;
-	memcpy(buf, desc_buf, size);
+	if (ascii_std)
+		memcpy(buf, desc_buf + QUERY_DESC_HDR_SIZE, size);
+	else
+		memcpy(buf, desc_buf, size);
 out:
 	pm_runtime_put_sync(hba->dev);
 	kfree(desc_buf);

@@ -539,7 +539,7 @@ static ssize_t tag_stats_show(struct device *dev, struct device_attribute *attr,
 			"%s: All tags statistics are empty\n", __func__);
 
 exit:
-	return 0;
+	return count;
 }
 static DEVICE_ATTR_RO(tag_stats);
 
@@ -558,7 +558,7 @@ static ssize_t err_state_show(struct device *dev, struct device_attribute *attr,
 	count += snprintf(buf + count, PAGE_SIZE, "%d\n", hba->debugfs_files.err_occurred);
 
 exit:
-	return 0;
+	return count;
 }
 static DEVICE_ATTR_RO(err_state);
 
@@ -597,8 +597,9 @@ static ssize_t req_stats_show(struct device *dev,
 
 	for (i = 0; i < TS_NUM_STATS; i++)
 		count += snprintf((buf + count), PAGE_SIZE, "%-10llu ",
+			hba->ufs_stats.req_stats[i].count ?
 			div64_u64(hba->ufs_stats.req_stats[i].sum,
-				hba->ufs_stats.req_stats[i].count));
+				  hba->ufs_stats.req_stats[i].count) : 0);
 	count += snprintf((buf + count), PAGE_SIZE, "\n%s:\t", "Count");
 
 	for (i = 0; i < TS_NUM_STATS; i++)
@@ -609,7 +610,7 @@ static ssize_t req_stats_show(struct device *dev,
 	spin_unlock_irqrestore(hba->host->host_lock, flags);
 
 exit:
-	return 0;
+	return count;
 }
 static DEVICE_ATTR_RO(req_stats);
 
