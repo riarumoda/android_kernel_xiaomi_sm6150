@@ -522,6 +522,9 @@ static ssize_t auto_reclaim_store(struct rtmm_reclaim *reclaim,
 	int target_free_size, swappiness;
 	int cur_free, cur_free_size, reclaim_size;
 
+	pr_info_ratelimited("rtmm: %s: tgid %d (%s), written: %.32s\n",
+			__func__, current->tgid, current->comm, buf);
+
 	if (!reclaim_input_parse(buf, reclaim,
 			&target_free_size, &swappiness)) {
 		pr_err("rtmm auto reclaim: param err(%s)\n", buf);
@@ -580,6 +583,9 @@ static ssize_t auto_reclaim_max_store(struct rtmm_reclaim *reclaim,
 {
 	int val, err;
 
+	pr_info_ratelimited("rtmm: %s: tgid %d (%s), written: %.32s\n",
+			__func__, current->tgid, current->comm, buf);
+
 	err = kstrtoint(buf, 10, &val);
 	if (err)
 		return err;
@@ -602,6 +608,9 @@ static ssize_t default_reclaim_swappiness_store(struct rtmm_reclaim *reclaim,
 {
 	int val, err;
 
+	pr_info_ratelimited("rtmm: %s: tgid %d (%s), written: %.32s\n",
+			__func__, current->tgid, current->comm, buf);
+
 	err = kstrtoint(buf, 10, &val);
 	if (err)
 		return err;
@@ -620,6 +629,9 @@ static ssize_t global_reclaim_store(struct rtmm_reclaim *reclaim,
 {
 	struct reclaim_cmd *cmd;
 	int target_free_size, swappiness;
+
+	pr_info_ratelimited("rtmm: %s: tgid %d (%s), written: %.32s\n",
+			__func__, current->tgid, current->comm, buf);
 
 	if (!reclaim_input_parse(buf, reclaim,
 			&target_free_size, &swappiness)) {
@@ -660,6 +672,9 @@ static ssize_t global_reclaim_max_store(struct rtmm_reclaim *reclaim,
 {
 	int val, err;
 
+	pr_info_ratelimited("rtmm: %s: tgid %d (%s), written: %.32s\n",
+			__func__, current->tgid, current->comm, buf);
+
 	err = kstrtoint(buf, 10, &val);
 	if (err)
 		return err;
@@ -678,6 +693,9 @@ static ssize_t kill_store(struct rtmm_reclaim *reclaim,
 {
 	struct reclaim_cmd *cmd;
 	int val, err;
+
+	pr_info_ratelimited("rtmm: %s: tgid %d (%s), written: %.32s\n",
+			__func__, current->tgid, current->comm, buf);
 
 	err = kstrtoint(buf, 10, &val);
 	if (err)
@@ -708,6 +726,9 @@ static ssize_t proc_reclaim_store(struct rtmm_reclaim *reclaim,
 	struct reclaim_cmd *cmd;
 	int ret, page_type, size_MB;
 	pid_t pid;
+
+	pr_info_ratelimited("rtmm: %s: tgid %d (%s), written: %.32s\n",
+			__func__, current->tgid, current->comm, buf);
 
 	ret = sscanf(buf, "%d %d %d", &pid, &page_type, &size_MB);
 	if (ret != 3 || pid <= 0 || size_MB < 0 ||
