@@ -173,6 +173,14 @@ compact           	WO	trigger memory compaction
 debug_stat        	RO	this file is used for zram debugging purposes
 backing_dev	  	RW	set up backend storage for zram to write out
 idle		  	WO	mark allocated slot as idle
+new		  	WO	clear idle marks and idle-age counts
+idle_stat	  	RO	count idle pages by idle-age count
+new_stat	  	RO	count pages not yet marked idle
+time_list	  	RW	configure MIUI page-lifetime thresholds
+pages_life	  	RO	report MIUI page-lifetime counts
+avg_size	  	RO	report MIUI time-weighted average pages
+origin_pages_max  	RO	report MIUI maximum stored pages
+wb_pages_max	  	RO	report MIUI maximum backing-device pages
 
 User space is advised to use the following files to read the device statistics.
 
@@ -276,7 +284,14 @@ Admin can request writeback of those idle pages at right timing via
 
 	"echo idle > /sys/block/zramX/writeback"
 
-With the command, zram writeback idle pages from memory to the storage.
+With the command, zram writes idle pages from memory to the storage. The
+command may include a maximum number of pages and a minimum idle-age count,
+for example:
+
+	"echo 'idle 100 2' > /sys/block/zramX/writeback"
+
+The age count is incremented each time "all" is written to idle, up to 10,
+and is cleared when a page is accessed or when "all" is written to new.
 
 If there are lots of write IO with flash device, potentially, it has
 flash wearout problem so that admin needs to design write limitation
@@ -350,6 +365,16 @@ First line of above example says 300th block is accessed at 75.033841sec
 and the block's state is huge so it is written back to the backing
 storage. It's a debugging feature so anyone shouldn't rely on it to work
 properly.
+
+= MIUI zram memory tracking
+
+With CONFIG_MIUI_ZRAM_MEMORY_TRACKING, zram exposes additional per-device
+sysfs statistics. The time_list node accepts a count followed by that many
+positive, strictly increasing age thresholds in seconds. pages_life reports
+the configured thresholds and access counts in the corresponding age
+intervals. avg_size reports the time-weighted average number of stored pages;
+origin_pages_max and wb_pages_max report the peak stored-page and
+backing-device-page counts since reset.
 
 Nitin Gupta
 ngupta@vflare.org

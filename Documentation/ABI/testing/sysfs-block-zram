@@ -107,12 +107,35 @@ Description:
 		If system has mounted debugfs, user can see which slots
 		are idle via /sys/kernel/debug/zram/zram<id>/block_state
 
+What:		/sys/block/zram<id>/new
+Date:		July 2026
+Contact:	Minchan Kim <minchan@kernel.org>
+Description:
+		The new file is write-only. Writing "all" clears the idle
+		mark and idle-age count for every zram slot.
+
+What:		/sys/block/zram<id>/idle_stat
+Date:		July 2026
+Contact:	Minchan Kim <minchan@kernel.org>
+Description:
+		The idle_stat file is read-only and reports counts of
+		allocated in-memory pages grouped by their idle-age count.
+		The output has one column for each count from 1 through 10.
+
+What:		/sys/block/zram<id>/new_stat
+Date:		July 2026
+Contact:	Minchan Kim <minchan@kernel.org>
+Description:
+		The new_stat file is read-only and reports the number of
+		allocated in-memory pages that have not been marked idle.
+
 What:		/sys/block/zram<id>/writeback
 Date:		November 2018
 Contact:	Minchan Kim <minchan@kernel.org>
 Description:
 		The writeback file is write-only and trigger idle and/or
-		huge page writeback to backing device.
+		huge page writeback to backing device. "idle" may be followed
+		by a maximum page count and a minimum idle-age count.
 
 What:		/sys/block/zram<id>/bd_stat
 Date:		November 2018
@@ -121,6 +144,49 @@ Description:
 		The bd_stat file is read-only and represents backing device's
 		statistics (bd_count, bd_reads, bd_writes) in a format
 		similar to block layer statistics file format.
+
+What:		/sys/block/zram<id>/wb_pages_max
+Date:		July 2026
+Contact:	Minchan Kim <minchan@kernel.org>
+Description:
+		With CONFIG_MIUI_ZRAM_MEMORY_TRACKING and either
+		CONFIG_ZRAM_WRITEBACK or CONFIG_RTMM, this file is read-only
+		and reports the maximum number of pages currently held on the
+		backing device since the last device reset.
+
+What:		/sys/block/zram<id>/time_list
+Date:		July 2026
+Contact:	Minchan Kim <minchan@kernel.org>
+Description:
+		With CONFIG_MIUI_ZRAM_MEMORY_TRACKING, this file is
+		read-write and contains the increasing page-age thresholds
+		in seconds used by pages_life. Write a count followed by
+		that many positive, strictly increasing thresholds; updating
+		the list resets the associated page-lifetime counters.
+
+What:		/sys/block/zram<id>/pages_life
+Date:		July 2026
+Contact:	Minchan Kim <minchan@kernel.org>
+Description:
+		With CONFIG_MIUI_ZRAM_MEMORY_TRACKING, this file is read-only
+		and reports the configured age thresholds and the number of
+		page accesses falling into each age bucket.
+
+What:		/sys/block/zram<id>/avg_size
+Date:		July 2026
+Contact:	Minchan Kim <minchan@kernel.org>
+Description:
+		With CONFIG_MIUI_ZRAM_MEMORY_TRACKING, this file is read-only
+		and reports the time-weighted average number of stored pages
+		since the device was initialized.
+
+What:		/sys/block/zram<id>/origin_pages_max
+Date:		July 2026
+Contact:	Minchan Kim <minchan@kernel.org>
+Description:
+		With CONFIG_MIUI_ZRAM_MEMORY_TRACKING, this file is read-only
+		and reports the maximum number of stored pages since the last
+		device reset.
 
 What:		/sys/block/zram<id>/writeback_limit_enable
 Date:		November 2018
