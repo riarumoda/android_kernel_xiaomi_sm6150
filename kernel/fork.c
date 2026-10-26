@@ -1807,6 +1807,10 @@ static __latent_entropy struct task_struct *copy_process(
 #endif
 
 	p->default_timer_slack_ns = current->timer_slack_ns;
+#ifdef CONFIG_PERF_CRITICAL_RT_TASK
+	/* the flag must not be inherited from the parent */
+	p->critical_rt_task = 0;
+#endif
 #ifdef CONFIG_SF_BINDER
 	/* the flag must not be inherited from the parent */
 	p->sf_binder_task = 0;

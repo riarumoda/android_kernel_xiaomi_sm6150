@@ -1359,6 +1359,16 @@ config SF_BINDER
 	  binder default priority every time a thread goes back to
 	  waiting for work.
 
+config PERF_CRITICAL_RT_TASK
+	bool "Let critical processes keep RT binder priority"
+	depends on ANDROID_BINDER_IPC
+	default n
+	help
+	  Do not clamp the RT priority inherited over binder to
+	  RLIMIT_RTPRIO for processes flagged as critical (launcher and
+	  systemui), so their binder threads can run as SCHED_FIFO
+	  (e.g. BlastBufferQueue binder threads).
+
 config PCSPKR_PLATFORM
 	bool "Enable PC-Speaker support" if EXPERT
 	depends on HAVE_PCSPKR_PLATFORM
