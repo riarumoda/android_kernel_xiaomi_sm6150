@@ -48,6 +48,7 @@
 #include <linux/fb.h>
 #include <linux/pinctrl/qcom-pinctrl.h>
 #include <drm/drm_bridge.h>
+#include <asm/hwconf_manager.h>
 
 #define FPC_GPIO_NO_DEFAULT -1
 #define FPC_GPIO_NO_DEFINED -2
@@ -1071,6 +1072,10 @@ static int fpc1020_probe(struct platform_device *pdev)
 
 	//rc = hw_reset(fpc1020);
 
+	register_hw_component_info("fingerprint_fpc");
+	add_hw_component_info("fingerprint_fpc", "vendor", "fpc");
+	add_hw_component_info("fingerprint_fpc", "ic_name", "fpc1020");
+
 	dev_info(dev, "%s: ok\n", __func__);
 
 exit:
@@ -1081,6 +1086,8 @@ exit:
 static int fpc1020_remove(struct platform_device *pdev)
 {
 	struct fpc1020_data *fpc1020 = platform_get_drvdata(pdev);
+
+	unregister_hw_component_info("fingerprint_fpc");
 
 #ifndef FPC_DRM_INTERFACE_WA
 	msm_drm_unregister_client(&fpc1020->notifier);

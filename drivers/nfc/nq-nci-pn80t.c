@@ -26,6 +26,7 @@
 #include <linux/uaccess.h>
 #include "nq-nci-pn80t.h"
 #include <linux/clk.h>
+#include <asm/hwconf_manager.h>
 #ifdef CONFIG_COMPAT
 #include <linux/compat.h>
 #endif
@@ -1279,6 +1280,10 @@ static int nqx_probe(struct i2c_client *client,
 	dev_err(&client->dev,
 	"%s: probing NFCC NQxxx exited successfully\n",
 		 __func__);
+
+	register_hw_component_info("nfc");
+	add_hw_component_info("nfc", "chip", "pn80t");
+
 	return 0;
 
 #ifdef NFC_KERNEL_BU
@@ -1321,6 +1326,8 @@ static int nqx_remove(struct i2c_client *client)
 {
 	int ret = 0;
 	struct nqx_dev *nqx_dev;
+
+	unregister_hw_component_info("nfc");
 
 	nqx_dev = i2c_get_clientdata(client);
 	if (!nqx_dev) {

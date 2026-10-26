@@ -28,6 +28,7 @@
 #include <linux/miscdevice.h>
 #include <linux/platform_device.h>
 #include <asm/uaccess.h>
+#include <asm/hwconf_manager.h>
 #include <linux/syscalls.h>
 #include <linux/power_supply.h>
 #include <linux/pm_qos.h>
@@ -4360,6 +4361,10 @@ aw8624_i2c_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 
 	g_aw8624 = aw8624;
 
+	register_hw_component_info("haptics");
+	add_hw_component_info("haptics", "vendor", "awinic");
+	add_hw_component_info("haptics", "ic_name", "aw8624");
+
 	pr_info("%s: probe completed successfully!\n", __func__);
 
 	return 0;
@@ -4386,6 +4391,8 @@ err_parse_dt:
 static int aw8624_i2c_remove(struct i2c_client *i2c)
 {
 	struct aw8624 *aw8624 = i2c_get_clientdata(i2c);
+
+	unregister_hw_component_info("haptics");
 
 	pr_info("%s: enter\n", __func__);
 

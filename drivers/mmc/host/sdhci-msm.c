@@ -44,6 +44,7 @@
 #include "sdhci-msm.h"
 #include "cmdq_hci.h"
 #include "cmdq_hci-crypto-qti.h"
+#include <asm/hwconf_manager.h>
 
 #define QOS_REMOVE_DELAY_MS	10
 #define CORE_POWER		0x0
@@ -5205,6 +5206,9 @@ static int sdhci_msm_probe(struct platform_device *pdev)
 	if (sdhci_msm_is_bootdevice(&pdev->dev))
 		mmc_flush_detect_work(host->mmc);
 
+	register_hw_component_info("mmc");
+	add_hw_component_info("mmc", "controller", "sdhci-msm");
+
 	/* Successful initialization */
 	goto out;
 
@@ -5257,6 +5261,8 @@ static int sdhci_msm_remove(struct platform_device *pdev)
 	int i;
 	int dead = (readl_relaxed(host->ioaddr + SDHCI_INT_STATUS) ==
 			0xffffffff);
+
+	unregister_hw_component_info("mmc");
 
 	pr_debug("%s: %s Enter\n", dev_name(&pdev->dev), __func__);
 	if (!gpio_is_valid(msm_host->pdata->status_gpio))

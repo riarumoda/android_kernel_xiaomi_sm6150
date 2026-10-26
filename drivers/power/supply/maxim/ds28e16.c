@@ -28,6 +28,7 @@
 #include <linux/power_supply.h>
 #include <linux/uaccess.h>
 #include <linux/interrupt.h>
+#include <asm/hwconf_manager.h>
 #include <linux/gpio/consumer.h>
 #include <linux/regmap.h>
 #include <linux/random.h>
@@ -1992,6 +1993,10 @@ static int ds28e16_probe(struct platform_device *pdev)
 				msecs_to_jiffies(0));
 	}
 #endif
+
+	register_hw_component_info("battery_auth");
+	add_hw_component_info("battery_auth", "ic_name", "ds28e16");
+
 	return 0;
 
 ds28e16_create_group_err:
@@ -2006,6 +2011,8 @@ ds28e16_parse_dt_err:
 static int ds28e16_remove(struct platform_device *pdev)
 {
 	struct ds28e16_data *ds28e16_data = platform_get_drvdata(pdev);
+
+	unregister_hw_component_info("battery_auth");
 
 	verify_psy_unregister(ds28e16_data);
 	kfree(ds28e16_data);

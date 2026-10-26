@@ -28,6 +28,7 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
+#include <asm/hwconf_manager.h>
 #include <linux/workqueue.h>
 #include <linux/regulator/consumer.h>
 #include <linux/of_gpio.h>
@@ -610,6 +611,10 @@ static int drv8846_probe(struct platform_device *pdev)
 		goto register_fail;
 	}
 
+	register_hw_component_info("step_motor");
+	add_hw_component_info("step_motor", "vendor", "ti");
+	add_hw_component_info("step_motor", "ic_name", "drv8846");
+
 	pr_debug("successfully probed.");
 	return 0;
 
@@ -626,6 +631,8 @@ fail:
 static int drv8846_remove(struct platform_device *pdev)
 {
 	struct drv8846_soc_ctrl *mctrl = platform_get_drvdata(pdev);
+
+	unregister_hw_component_info("step_motor");
 
 	cancel_work_sync(&mctrl->pwm_apply_work);
 	hrtimer_cancel(&mctrl->pwm_timer);

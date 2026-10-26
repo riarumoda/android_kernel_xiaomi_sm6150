@@ -28,6 +28,7 @@
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/of_gpio.h>
+#include <asm/hwconf_manager.h>
 #include <linux/err.h>
 #include <linux/regulator/driver.h>
 #include <linux/regulator/of_regulator.h>
@@ -2497,6 +2498,10 @@ static int bq2597x_charger_probe(struct i2c_client *client,
 	/* schedule_delayed_work(&bq->monitor_work, 60 * HZ); */
 	bq_info("bq2597x probe successfully, Part Num = %d, chip_vendor = %d\n!", bq->part_no, bq->chip_vendor);
 
+	register_hw_component_info("charge_pump");
+	add_hw_component_info("charge_pump", "vendor", "ti");
+	add_hw_component_info("charge_pump", "ic_name", "bq2597x");
+
 	return 0;
 
 err_1:
@@ -2562,6 +2567,8 @@ static int bq2597x_resume(struct device *dev)
 static int bq2597x_charger_remove(struct i2c_client *client)
 {
 	struct bq2597x *bq = i2c_get_clientdata(client);
+
+	unregister_hw_component_info("charge_pump");
 
 	bq2597x_enable_adc(bq, false);
 

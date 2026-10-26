@@ -26,6 +26,7 @@
 #include <linux/completion.h>
 #include <linux/debugfs.h>
 #include <linux/of_irq.h>
+#include <asm/hwconf_manager.h>
 #ifdef CONFIG_DRM
 #include <linux/msm_drm_notify.h>
 #include <linux/notifier.h>
@@ -3323,6 +3324,9 @@ out:
 		atomic_set(&core_data->initialized, 1);
 		goodix_modules.core_data = core_data;
 		complete_all(&goodix_modules.core_comp);
+		register_hw_component_info("touch");
+		add_hw_component_info("touch", "vendor", "goodix");
+		add_hw_component_info("touch", "ic_name", "gt9896");
 	}
 
 	ts_info("goodix_ts_probe OUT, r:%d", r);
@@ -3334,6 +3338,8 @@ out:
 static int goodix_ts_remove(struct platform_device *pdev)
 {
 	struct goodix_ts_core *core_data = platform_get_drvdata(pdev);
+
+	unregister_hw_component_info("touch");
 
 	atomic_set(&core_data->initialized, 0);
 	if (atomic_read(&core_data->ts_esd.esd_on))

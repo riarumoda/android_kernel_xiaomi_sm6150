@@ -27,6 +27,7 @@
 #include <linux/of.h>
 #endif
 #include <linux/gpio.h>
+#include <asm/hwconf_manager.h>
 
 #include <asm/delay.h>
 #include <linux/fs.h>
@@ -259,12 +260,19 @@ static int ir_spi_probe(struct spi_device *spi)
 	idata->buffer = buffer;
 	idata->buffer_size = IR_SPI_DATA_BUFFER;
 	misc_register(&ir_spi_dev_drv);
+
+	register_hw_component_info("ir");
+	add_hw_component_info("ir", "type", "ir_spi");
+
 	return 0;
 }
 
 static int ir_spi_remove(struct spi_device *spi)
 {
 	struct ir_spi_data *idata = spi_get_drvdata(spi);
+
+	unregister_hw_component_info("ir");
+
 	if (idata->buffer != NULL){
 		kfree(idata->buffer);
 		idata->buffer = NULL;

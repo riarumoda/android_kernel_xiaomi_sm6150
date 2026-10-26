@@ -26,6 +26,7 @@
 #include <linux/input.h>
 #include <linux/uaccess.h>
 #include <linux/spi/spi.h>
+#include <asm/hwconf_manager.h>
 
 #include "sf_ctl.h"
 
@@ -699,6 +700,8 @@ static int sf_remove(sf_device_t *spi)
 {
     int err = 0;
 
+    unregister_hw_component_info("fingerprint_fortsense");
+
     if (sf_ctl_dev.pdev != NULL && sf_ctl_dev.gpio_init != NULL) {
 #ifdef CONFIG_HAS_EARLYSUSPEND
         unregister_early_suspend(&sf_ctl_dev.early_suspend);
@@ -924,6 +927,10 @@ static int sf_probe(sf_device_t *dev)
     }
     xprintk(KERN_ERR, "%s set beanpod isee2.7.0 uuid ok \n", __FUNCTION__);
 #endif
+    register_hw_component_info("fingerprint_fortsense");
+    add_hw_component_info("fingerprint_fortsense", "vendor", "fortsense");
+    add_hw_component_info("fingerprint_fortsense", "ic_name", "fs_tee");
+
     xprintk(KERN_ERR, "%s leave\n", __FUNCTION__);
     return err;
 }

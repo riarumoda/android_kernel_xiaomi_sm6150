@@ -13,6 +13,7 @@
 #include <linux/pm.h>
 #include <linux/regulator/consumer.h>
 #include <linux/mutex.h>
+#include <asm/hwconf_manager.h>
 
 
 #define WL2866D_ID  0x64
@@ -840,6 +841,9 @@ static int wl2866d_probe(struct i2c_client *client,
 
 	camera_chip = chip;
 
+	register_hw_component_info("camera_ldo");
+	add_hw_component_info("camera_ldo", "ic_name", "wl2866d");
+
 	pr_err("%s,successfully\n", __func__);
 	return 0;
 err_sysfs:
@@ -857,6 +861,8 @@ err_mem:
 static int wl2866d_remove(struct i2c_client *client)
 {
 	struct wl2866d_chip *chip = i2c_get_clientdata(client);
+
+	unregister_hw_component_info("camera_ldo");
 
 	devm_kfree(chip->dev, chip);
 	chip = NULL;

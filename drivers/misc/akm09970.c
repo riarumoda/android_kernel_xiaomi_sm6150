@@ -28,6 +28,7 @@
 #include <linux/atomic.h>
 #include <linux/of.h>
 #include <linux/gpio.h>
+#include <asm/hwconf_manager.h>
 #include <linux/of_gpio.h>
 #include <linux/device.h>
 #include <linux/cdev.h>
@@ -724,6 +725,10 @@ static int akm09970_probe(struct i2c_client *client, const struct i2c_device_id 
 	if (rc < 0)
 		pr_err("Failed to create debug file: %d\n", rc);
 
+	register_hw_component_info("compass");
+	add_hw_component_info("compass", "vendor", "akm");
+	add_hw_component_info("compass", "ic_name", "akm09970");
+
 	pr_err("Probe exit");
 
 	return 0;
@@ -765,6 +770,8 @@ exit:
 static int akm09970_remove(struct i2c_client *client)
 {
 	struct akm09970_soc_ctrl *c_ctrl = i2c_get_clientdata(client);
+
+	unregister_hw_component_info("compass");
 
 	cancel_work_sync(&c_ctrl->report_work);
 	destroy_workqueue(c_ctrl->work_queue);

@@ -46,6 +46,7 @@
 #include <linux/earlysuspend.h>
 #define FTS_SUSPEND_LEVEL 1	/* Early-suspend level */
 #endif
+#include <asm/hwconf_manager.h>
 #include "focaltech_core.h"
 
 #include "../xiaomi/xiaomi_touch.h"
@@ -2459,11 +2460,15 @@ static int fts_ts_probe(struct i2c_client *client, const struct i2c_device_id *i
 		return ret;
 	}
 	FTS_INFO("Touch Screen(I2C BUS) driver prboe successfully");
+	register_hw_component_info("touch_fts");
+	add_hw_component_info("touch_fts", "vendor", "focaltech");
+	add_hw_component_info("touch_fts", "ic_name", "ft3658u");
 	return 0;
 }
 
 static int fts_ts_remove(struct i2c_client *client)
 {
+	unregister_hw_component_info("touch_fts");
 	return fts_ts_remove_entry(i2c_get_clientdata(client));
 }
 static const struct i2c_device_id fts_ts_id[] = {

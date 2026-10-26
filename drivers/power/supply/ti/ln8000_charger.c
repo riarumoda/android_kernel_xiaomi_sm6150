@@ -28,6 +28,7 @@
 #include <linux/of_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/pm_wakeup.h>
+#include <asm/hwconf_manager.h>
 #include <linux/power_supply.h>
 #include <linux/gpio/consumer.h>
 #include <linux/i2c.h>
@@ -1647,6 +1648,10 @@ static int ln8000_probe(struct i2c_client *client, const struct i2c_device_id *i
 
     determine_initial_status(info);
 
+    register_hw_component_info("charger_ln8000");
+    add_hw_component_info("charger_ln8000", "vendor", "lionsemi");
+    add_hw_component_info("charger_ln8000", "ic_name", "ln8000");
+
     return 0;
 
 err_wakeup:
@@ -1674,6 +1679,8 @@ err_devmem:
 static int ln8000_remove(struct i2c_client *client)
 {
     struct ln8000_info *info = i2c_get_clientdata(client);
+
+    unregister_hw_component_info("charger_ln8000");
 
     ln8000_change_opmode(info, LN8000_OPMODE_STANDBY);
 

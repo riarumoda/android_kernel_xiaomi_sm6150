@@ -28,6 +28,7 @@
 #include <linux/iio/sysfs.h>
 #include <linux/iio/trigger.h>
 #include <linux/iio/buffer.h>
+#include <asm/hwconf_manager.h>
 #include <linux/iio/triggered_buffer.h>
 #include <linux/regulator/driver.h>
 #include <linux/regulator/consumer.h>
@@ -275,6 +276,9 @@ static int us_prox_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	register_hw_component_info("ultrasound");
+	add_hw_component_info("ultrasound", "type", "proximity");
+
 	pr_info("%s: end\n", __func__);
 	return ret;
 }
@@ -282,6 +286,8 @@ static int us_prox_probe(struct platform_device *pdev)
 static int us_prox_remove(struct platform_device *pdev)
 {
 	struct us_prox_data *us_prox;
+
+	unregister_hw_component_info("ultrasound");
 
 	us_prox = dev_get_drvdata(&pdev->dev);
 
