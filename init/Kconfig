@@ -1349,6 +1349,16 @@ config ELF_CORE
 	  Enable support for generating core dumps. Disabling saves about 4k.
 
 
+config SF_BINDER
+	bool "Keep surfaceflinger binder thread priority (FIFO)"
+	depends on ANDROID_BINDER_IPC
+	default n
+	help
+	  Keep the scheduling policy/priority of surfaceflinger's binder
+	  threads (e.g. SCHED_FIFO) instead of resetting them to the
+	  binder default priority every time a thread goes back to
+	  waiting for work.
+
 config PCSPKR_PLATFORM
 	bool "Enable PC-Speaker support" if EXPERT
 	depends on HAVE_PCSPKR_PLATFORM

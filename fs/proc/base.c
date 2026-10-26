@@ -2600,6 +2600,90 @@ static const struct file_operations proc_pid_set_timerslack_ns_operations = {
 	.release	= single_release,
 };
 
+#ifdef CONFIG_SF_BINDER
+static int sf_binder_task_show(struct seq_file *m, void *v)
+{
+	struct inode *inode = m->private;
+	struct task_struct *p;
+	int err = 0;
+
+	p = get_proc_task(inode);
+	if (!p)
+		return -ESRCH;
+
+	if (p != current) {
+		if (!capable(CAP_SYS_NICE)) {
+			err = -EPERM;
+			goto out;
+		}
+		err = security_task_getscheduler(p);
+		if (err)
+			goto out;
+	}
+
+	task_lock(p);
+	seq_printf(m, "%u\n", p->sf_binder_task);
+	task_unlock(p);
+
+out:
+	put_task_struct(p);
+
+	return err;
+}
+
+static int sf_binder_task_open(struct inode *inode, struct file *filp)
+{
+	return single_open(filp, sf_binder_task_show, inode);
+}
+
+static ssize_t sf_binder_task_write(struct file *file, const char __user *buf,
+				    size_t count, loff_t *offset)
+{
+	struct inode *inode = file_inode(file);
+	struct task_struct *p;
+	unsigned int sf_binder_task;
+	int err;
+
+	err = kstrtouint_from_user(buf, count, 10, &sf_binder_task);
+	if (err < 0)
+		return err;
+
+	p = get_proc_task(inode);
+	if (!p)
+		return -ESRCH;
+
+	if (p != current) {
+		if (!capable(CAP_SYS_NICE)) {
+			count = -EPERM;
+			goto out;
+		}
+
+		err = security_task_setscheduler(p);
+		if (err) {
+			count = err;
+			goto out;
+		}
+	}
+
+	task_lock(p);
+	p->sf_binder_task = sf_binder_task;
+	task_unlock(p);
+
+out:
+	put_task_struct(p);
+
+	return count;
+}
+
+static const struct file_operations proc_pid_set_sf_binder_task_operations = {
+	.open		= sf_binder_task_open,
+	.read		= seq_read,
+	.write		= sf_binder_task_write,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+#endif
+
 static int proc_pident_instantiate(struct inode *dir,
 	struct dentry *dentry, struct task_struct *task, const void *ptr)
 {
@@ -3826,6 +3910,9 @@ static const struct pid_entry tid_base_stuff[] = {
 #endif
 #ifdef CONFIG_LIVEPATCH
 	ONE("patch_state",  S_IRUSR, proc_pid_patch_state),
+#endif
+#ifdef CONFIG_SF_BINDER
+	REG("sf_binder_task", S_IRUGO|S_IWUGO, proc_pid_set_sf_binder_task_operations),
 #endif
 #ifdef CONFIG_CPU_FREQ_TIMES
 	ONE("time_in_state", 0444, proc_time_in_state_show),
