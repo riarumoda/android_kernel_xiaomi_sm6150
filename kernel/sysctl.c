@@ -146,6 +146,9 @@ static int six_hundred_forty_kb = 640 * 1024;
 static int __maybe_unused two_hundred_million = 200000000;
 static int two_hundred_fifty_five = 255;
 
+/* make a dummy nr_pdflush_threads variable so it doesn't return bad address */
+static int nr_pdflush_threads_dummy = 0;
+
 /* this is needed for the proc_doulongvec_minmax of vm_dirty_bytes */
 static unsigned long dirty_bytes_min = 2 * PAGE_SIZE;
 
@@ -1628,8 +1631,10 @@ static struct ctl_table vm_table[] = {
 	},
 	{
 		.procname       = "nr_pdflush_threads",
+		.data			= &nr_pdflush_threads_dummy,
+		.maxlen			= sizeof(int),
 		.mode           = 0444 /* read-only */,
-		.proc_handler   = pdflush_proc_obsolete,
+		.proc_handler   = proc_dointvec,
 	},
 	{
 		.procname	= "swappiness",
