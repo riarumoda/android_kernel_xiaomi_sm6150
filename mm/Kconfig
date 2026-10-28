@@ -829,3 +829,17 @@ config FORCE_ALLOC_FROM_DMA_ZONE
 	  always using ZONE_DMA memory.
 
 	  If unsure, say "n".
+
+config OPLUS_MM_HACKS
+	bool "Enable oplus memory management hacks"
+	depends on SWAP
+	default n
+	help
+	  Imports a set of memory management tweaks used on Oplus devices:
+	  a higher default vm.swappiness (100, up to 200 allowed), a separate
+	  vm.direct_swappiness for direct reclaim, no reclaim throttling for
+	  tasks with a negative oom_score_adj, a milder file LRU inactive
+	  ratio, no swap readahead (page-cluster 0) and zsmalloc zspages of
+	  up to 8 pages.
+
+	  If unsure, say "n".
