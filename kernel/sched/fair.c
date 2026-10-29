@@ -8425,6 +8425,26 @@ static inline int wake_energy(struct task_struct *p, int prev_cpu,
 	return true;
 }
 
+#ifdef CONFIG_MIGT
+static inline void migt_handle_minor_window(struct task_struct *p)
+{
+	cpumask_t mask;
+
+	if (minor_window_task(p) && get_minor_window_cpumask(p, &mask)) {
+		if (!(p->migt.flag & MIGT_MINOR_TASK)) {
+			p->migt.flag |= MIGT_MINOR_TASK;
+			cpumask_copy(&p->migt.cpus_allowed, &p->cpus_allowed);
+		}
+		cpumask_copy(&p->cpus_allowed, &mask);
+		p->nr_cpus_allowed = cpumask_weight(&mask);
+	} else if (p->migt.flag & MIGT_MINOR_TASK) {
+		p->migt.flag &= ~MIGT_MINOR_TASK;
+		cpumask_copy(&p->cpus_allowed, &p->migt.cpus_allowed);
+		p->nr_cpus_allowed = cpumask_weight(&p->cpus_allowed);
+	}
+}
+#endif
+
 /*
  * select_task_rq_fair: Select target runqueue for the waking task in domains
  * that have the 'sd_flag' flag set. In practice, this is SD_BALANCE_WAKE,
@@ -8449,6 +8469,10 @@ select_task_rq_fair(struct task_struct *p, int prev_cpu, int sd_flag, int wake_f
 	int want_energy = 0;
 	int sync = wake_flags & WF_SYNC;
 
+#ifdef CONFIG_MIGT
+	migt_handle_minor_window(p);
+#endif
+
 	rcu_read_lock();
 
 	if (sd_flag & SD_BALANCE_WAKE) {
@@ -8464,6 +8488,9 @@ select_task_rq_fair(struct task_struct *p, int prev_cpu, int sd_flag, int wake_f
 		}
 
 		record_wakee(p);
+#ifdef CONFIG_MIGT
+		migt_wake_render(p);
+#endif
 		want_energy = wake_energy(p, prev_cpu, sd_flag, wake_flags);
 		want_affine = !want_energy &&
 			      !wake_wide(p, sibling_count_hint) &&

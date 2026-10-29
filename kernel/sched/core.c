@@ -766,6 +766,13 @@ static void set_load_weight(struct task_struct *p)
 	load->inv_weight = sched_prio_to_wmult[prio];
 }
 
+#ifdef CONFIG_MIGT
+void __weak migt_monitor_hook(int enqueue, int cpu, struct task_struct *p,
+			      u64 walltime)
+{
+}
+#endif
+
 static inline void enqueue_task(struct rq *rq, struct task_struct *p, int flags)
 {
 	if (!(flags & ENQUEUE_NOCLOCK))
@@ -778,6 +785,9 @@ static inline void enqueue_task(struct rq *rq, struct task_struct *p, int flags)
 
 	p->sched_class->enqueue_task(rq, p, flags);
 	walt_update_last_enqueue(p);
+#ifdef CONFIG_MIGT
+	migt_monitor_hook(1, rq->cpu, p, rq_clock_task(rq));
+#endif
 	trace_sched_enq_deq_task(p, 1, cpumask_bits(&p->cpus_allowed)[0]);
 }
 
@@ -795,6 +805,9 @@ static inline void dequeue_task(struct rq *rq, struct task_struct *p, int flags)
 #ifdef CONFIG_SCHED_WALT
 	if (p == rq->ed_task)
 		early_detection_notify(rq, sched_ktime_clock());
+#endif
+#ifdef CONFIG_MIGT
+	migt_monitor_hook(0, rq->cpu, p, rq_clock_task(rq));
 #endif
 	trace_sched_enq_deq_task(p, 0, cpumask_bits(&p->cpus_allowed)[0]);
 }

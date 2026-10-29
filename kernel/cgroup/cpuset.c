@@ -2129,6 +2129,12 @@ static void cpuset_fork(struct task_struct *task)
 	if (task_css_is_root(task, cpuset_cgrp_id))
 		return;
 
+#ifdef CONFIG_MIGT
+	if (current->migt.flag & MIGT_MINOR_TASK) {
+		set_cpus_allowed_ptr(task, &current->migt.cpus_allowed);
+		task->migt.flag &= ~MIGT_MINOR_TASK;
+	} else
+#endif
 	set_cpus_allowed_ptr(task, &current->cpus_allowed);
 	task->mems_allowed = current->mems_allowed;
 }

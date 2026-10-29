@@ -250,6 +250,20 @@ static void sugov_update_commit(struct sugov_policy *sg_policy, u64 time,
 	}
 }
 
+#ifdef CONFIG_MIGT
+__weak unsigned int glk_freq_limit(struct cpufreq_policy *policy,
+		unsigned int *target_freq)
+{
+	return 0;
+}
+
+__weak unsigned long glk_cal_freq(struct cpufreq_policy *policy,
+		unsigned long util, unsigned long max)
+{
+	return 0;
+}
+#endif
+
 #define TARGET_LOAD 80
 /**
  * get_next_freq - Compute a new frequency for a given cpufreq policy.
@@ -280,7 +294,23 @@ static unsigned int get_next_freq(struct sugov_policy *sg_policy,
 	unsigned int freq = arch_scale_freq_invariant() ?
 				policy->cpuinfo.max_freq : policy->cur;
 
+#ifdef CONFIG_MIGT
+	unsigned int walt_freq;
+	unsigned long glk_freq;
+
+	walt_freq = (freq + (freq >> 2)) * util / max;
+	glk_freq = glk_cal_freq(policy, util, max);
+	if (glk_freq) {
+		freq = glk_freq;
+		sg_policy->need_freq_update = true;
+	} else {
+		freq = glk_freq_limit(policy, &walt_freq);
+		if (!freq)
+			freq = walt_freq;
+	}
+#else
 	freq = (freq + (freq >> 2)) * util / max;
+#endif
 	trace_sugov_next_freq(policy->cpu, util, max, freq);
 
 	if (freq == sg_policy->cached_raw_freq && sg_policy->next_freq != UINT_MAX)

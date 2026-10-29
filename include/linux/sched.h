@@ -735,6 +735,18 @@ struct wake_q_node {
 	struct wake_q_node *next;
 };
 
+#ifdef CONFIG_MIGT
+#ifndef MIGT_MINOR_TASK
+#define MIGT_MINOR_TASK		0x1
+#endif
+
+struct migt_task_info {
+	unsigned int		flag;
+	unsigned int		wake_render;
+	cpumask_t		cpus_allowed;
+};
+#endif
+
 struct task_struct {
 #ifdef CONFIG_THREAD_INFO_IN_TASK
 	/*
@@ -819,6 +831,9 @@ struct task_struct {
 	int				nr_cpus_allowed;
 	cpumask_t			cpus_allowed;
 	cpumask_t			cpus_requested;
+#ifdef CONFIG_MIGT
+	struct migt_task_info		migt;
+#endif
 
 #ifdef CONFIG_PREEMPT_RCU
 	int				rcu_read_lock_nesting;
@@ -2006,5 +2021,13 @@ static inline void set_wake_up_idle(bool enabled)
 	else
 		current->flags &= ~PF_WAKE_UP_IDLE;
 }
+
+#ifdef CONFIG_MIGT
+extern bool minor_window_task(struct task_struct *p);
+extern bool get_minor_window_cpumask(struct task_struct *p,
+				     struct cpumask *mask);
+extern bool migt_is_render_thread(struct task_struct *p);
+extern void migt_wake_render(struct task_struct *p);
+#endif
 
 #endif
