@@ -159,6 +159,20 @@ core-$(CONFIG_CRYPTO) += arch/arm64/crypto/
 libs-y		:= arch/arm64/lib/ $(libs-y)
 core-$(CONFIG_EFI_STUB) += $(objtree)/drivers/firmware/efi/libstub/lib.a
 
+# Objects that are compiled before the rest of the kernel image so that a
+# bad syscall table entry fails fast.  arch/arm64/kernel/sys32.o is the
+# compat syscall table and is usually the first thing to break.
+PREFLIGHT_OBJS := kernel/exit.o kernel/fork.o kernel/signal.o \
+		  net/core/sock.o fs/stat.o fs/open.o fs/file.o \
+		  fs/utimes.o net/core/rtnetlink.o \
+		  arch/arm64/kernel/sys.o
+ifeq ($(CONFIG_COMPAT),y)
+PREFLIGHT_OBJS += arch/arm64/kernel/sys32.o
+endif
+ifdef CONFIG_SECURITY_SELINUX
+PREFLIGHT_OBJS += security/selinux/nlmsgtab.o
+endif
+
 ifeq ($(CONFIG_BUILD_ARM64_KERNEL_COMPRESSION_GZIP),y)
 KBUILD_IMAGE   := Image.gz
 else

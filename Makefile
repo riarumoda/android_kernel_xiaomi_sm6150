@@ -1248,8 +1248,15 @@ $(sort $(vmlinux-deps)): $(vmlinux-dirs) ;
 # make menuconfig etc.
 # Error messages still appears in the original language
 
+# Compile the syscall-table-sensitive objects before descending into the
+# rest of the tree.  This turns a bad syscall number into an early failure
+# instead of a failure after the whole kernel has been built.  The list is
+# populated by the architecture Makefile.
+PHONY += preflight-objects
+preflight-objects: $(PREFLIGHT_OBJS)
+
 PHONY += $(vmlinux-dirs)
-$(vmlinux-dirs): prepare scripts
+$(vmlinux-dirs): prepare scripts preflight-objects
 	$(Q)$(MAKE) $(build)=$@ need-builtin=1
 
 define filechk_kernel.release
