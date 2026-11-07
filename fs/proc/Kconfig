@@ -88,3 +88,15 @@ config PROC_UID
 	depends on PROC_FS && RT_MUTEXES
 	help
 	Provides aggregated per-uid information under /proc/uid.
+
+config FAKE_PROC_VERSION_STRING
+	string "Fake /proc/version string"
+	depends on PROC_FS
+	default ""
+	help
+	  If non-empty, /proc/version reports this string instead of the
+	  real kernel version. Leave it empty to report the real version.
+
+	  This only changes the /proc/version file. It does not change
+	  uname(2), /proc/sys/kernel/osrelease, the UTS namespace, or the
+	  module vermagic.

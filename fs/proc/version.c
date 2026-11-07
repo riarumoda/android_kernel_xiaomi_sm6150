@@ -8,6 +8,12 @@
 
 static int version_proc_show(struct seq_file *m, void *v)
 {
+#ifdef CONFIG_FAKE_PROC_VERSION_STRING
+	if (CONFIG_FAKE_PROC_VERSION_STRING[0]) {
+		seq_printf(m, "%s\n", CONFIG_FAKE_PROC_VERSION_STRING);
+		return 0;
+	}
+#endif
 	seq_printf(m, linux_proc_banner,
 		utsname()->sysname,
 		utsname()->release,
