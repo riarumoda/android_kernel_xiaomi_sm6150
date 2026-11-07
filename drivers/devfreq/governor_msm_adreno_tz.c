@@ -12,6 +12,7 @@
  */
 #include <linux/errno.h>
 #include <linux/module.h>
+#include <linux/moduleparam.h>
 #include <linux/devfreq.h>
 #include <linux/math64.h>
 #include <linux/spinlock.h>
@@ -38,11 +39,16 @@ static DEFINE_SPINLOCK(suspend_lock);
 #define MIN_BUSY		1000
 #define MAX_TZ_VERSION		0
 
-/*
- * CEILING is 50msec, larger than any standard
- * frame length, but less than the idle timer.
- */
-#define CEILING			50000
+/* Sustained-busy detection thresholds. */
+#define BUSY_RATIO_PCT		90
+#define BUSY_STREAK_LEN		2
+
+/* Activity boost hold (ms) and power level index (0 = highest). */
+static unsigned int tz_boost_hold_ms = 100;
+module_param(tz_boost_hold_ms, uint, 0644);
+static unsigned int tz_boost_pwrlevel = 1;
+module_param(tz_boost_pwrlevel, uint, 0644);
+
 #define TZ_RESET_ID		0x3
 #define TZ_UPDATE_ID		0x4
 #define TZ_INIT_ID		0x6
@@ -343,6 +349,7 @@ static int tz_get_target_freq(struct devfreq *devfreq, unsigned long *freq)
 	int val, level = 0;
 	unsigned int scm_data[4];
 	int context_count = 0;
+	bool busy_burst;
 
 	/* keeps stats.private_data == NULL   */
 	result = devfreq->profile->get_dev_status(devfreq->dev.parent, &stats);
@@ -354,6 +361,10 @@ static int tz_get_target_freq(struct devfreq *devfreq, unsigned long *freq)
 	*freq = stats.current_frequency;
 	priv->bin.total_time += stats.total_time;
 	priv->bin.busy_time += stats.busy_time;
+
+	if (stats.busy_time && tz_boost_hold_ms)
+		priv->boost_until_ms =
+			ktime_to_ms(ktime_get()) + tz_boost_hold_ms;
 
 	if (stats.private_data)
 		context_count =  *((int *)stats.private_data);
@@ -378,12 +389,22 @@ static int tz_get_target_freq(struct devfreq *devfreq, unsigned long *freq)
 		return level;
 	}
 
-	/*
-	 * If there is an extended block of busy processing,
-	 * increase frequency.  Otherwise run the normal algorithm.
-	 */
-	if (!priv->disable_busy_time_burst &&
-			priv->bin.busy_time > CEILING) {
+	/* Detect sustained high busy ratio. */
+	busy_burst = false;
+	if (!priv->disable_busy_time_burst && priv->bin.total_time > 0) {
+		if ((u64)priv->bin.busy_time * 100 >=
+				(u64)priv->bin.total_time * BUSY_RATIO_PCT) {
+			if (priv->busy_streak < BUSY_STREAK_LEN)
+				priv->busy_streak++;
+		} else {
+			priv->busy_streak = 0;
+		}
+		busy_burst = priv->busy_streak >= BUSY_STREAK_LEN;
+	} else {
+		priv->busy_streak = 0;
+	}
+
+	if (busy_burst) {
 		val = -1 * level;
 	} else {
 
@@ -406,6 +427,12 @@ static int tz_get_target_freq(struct devfreq *devfreq, unsigned long *freq)
 		level = max(level, 0);
 		level = min_t(int, level, devfreq->profile->max_state - 1);
 	}
+
+	/* Activity frequency floor. */
+	if (!busy_burst && tz_boost_hold_ms &&
+			(unsigned int)level > tz_boost_pwrlevel &&
+			ktime_to_ms(ktime_get()) < priv->boost_until_ms)
+		level = tz_boost_pwrlevel;
 
 	*freq = devfreq->profile->freq_table[level];
 	return 0;
@@ -432,6 +459,11 @@ static int tz_start(struct devfreq *devfreq)
 	devfreq->data = gpu_profile->private_data;
 
 	priv = devfreq->data;
+
+	priv->busy_streak = 0;
+	priv->boost_until_ms = 0;
+	if (tz_boost_pwrlevel >= devfreq->profile->max_state)
+		tz_boost_pwrlevel = devfreq->profile->max_state - 1;
 
 	out = 1;
 	if (devfreq->profile->max_state < MSM_ADRENO_MAX_PWRLEVELS) {
@@ -477,6 +509,8 @@ static int tz_suspend(struct devfreq *devfreq)
 
 	priv->bin.total_time = 0;
 	priv->bin.busy_time = 0;
+	priv->busy_streak = 0;
+	priv->boost_until_ms = 0;
 	return 0;
 }
 

@@ -35,9 +35,17 @@ static struct workqueue_struct *cpu_boost_wq;
 static struct work_struct input_boost_work;
 
 static bool input_boost_enabled;
+static bool input_boost_active;
 
 static unsigned int input_boost_ms = 40;
 module_param(input_boost_ms, uint, 0644);
+
+static unsigned int input_boost_min_ms = 300;
+module_param(input_boost_min_ms, uint, 0644);
+
+/* Boost policies without an explicit frequency to their current maximum. */
+static bool input_boost_unlisted_max = true;
+module_param(input_boost_unlisted_max, bool, 0644);
 
 static unsigned int sched_boost_on_input;
 module_param(sched_boost_on_input, uint, 0644);
@@ -47,6 +55,11 @@ static bool sched_boost_active;
 static struct delayed_work input_boost_rem;
 static u64 last_input_time;
 #define MIN_INPUT_INTERVAL (150 * USEC_PER_MSEC)
+
+static unsigned int input_boost_duration_ms(void)
+{
+	return max(input_boost_ms, input_boost_min_ms);
+}
 
 static int set_input_boost_freq(const char *buf, const struct kernel_param *kp)
 {
@@ -130,8 +143,11 @@ static int boost_adjust_notify(struct notifier_block *nb, unsigned long val,
 
 	switch (val) {
 	case CPUFREQ_ADJUST:
-		if (!ib_min)
-			break;
+		if (!ib_min) {
+			if (!input_boost_active || !input_boost_unlisted_max)
+				break;
+			ib_min = policy->max;
+		}
 
 		pr_debug("CPU%u policy min before boost: %u kHz\n",
 			 cpu, policy->min);
@@ -171,6 +187,7 @@ static void do_input_boost_rem(struct work_struct *work)
 
 	/* Reset the input_boost_min for all CPUs in the system */
 	pr_debug("Resetting input boost min for all CPUs\n");
+	input_boost_active = false;
 	for_each_possible_cpu(i) {
 		i_sync_info = &per_cpu(sync_info, i);
 		i_sync_info->input_boost_min = 0;
@@ -198,6 +215,8 @@ static void do_input_boost(struct work_struct *work)
 		sched_boost_active = false;
 	}
 
+	input_boost_active = true;
+
 	/* Set the input_boost_min for all CPUs in the system */
 	pr_debug("Setting input boost min for all CPUs\n");
 	for_each_possible_cpu(i) {
@@ -218,19 +237,27 @@ static void do_input_boost(struct work_struct *work)
 	}
 
 	queue_delayed_work(cpu_boost_wq, &input_boost_rem,
-					msecs_to_jiffies(input_boost_ms));
+				msecs_to_jiffies(input_boost_duration_ms()));
 }
 
 static void cpuboost_input_event(struct input_handle *handle,
 		unsigned int type, unsigned int code, int value)
 {
-	u64 now;
+	u64 now, interval;
 
 	if (!input_boost_enabled)
 		return;
 
 	now = ktime_to_us(ktime_get());
-	if (now - last_input_time < MIN_INPUT_INTERVAL)
+
+	/* Re-arm before the current window expires. */
+	interval = (u64)input_boost_duration_ms() * USEC_PER_MSEC / 2;
+	if (interval < 20 * USEC_PER_MSEC)
+		interval = 20 * USEC_PER_MSEC;
+	if (interval > MIN_INPUT_INTERVAL)
+		interval = MIN_INPUT_INTERVAL;
+
+	if (now - last_input_time < interval)
 		return;
 
 	if (work_pending(&input_boost_work))
