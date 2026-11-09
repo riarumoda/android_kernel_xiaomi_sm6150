@@ -60,7 +60,7 @@ static bool initcalls_done;
 /* Save the async probe drivers' name from kernel cmdline */
 #define ASYNC_DRV_NAMES_MAX_LEN	256
 static char async_probe_drv_names[ASYNC_DRV_NAMES_MAX_LEN] =
-	"gtx8,goodix_ts,aw8624_haptic,nq-nci,ln8000_charger,bq2597x-charger";
+	"aw8624_haptic,nq-nci,ln8000_charger,bq2597x-charger";
 
 /*
  * In some cases, like suspend to RAM or hibernation, It might be reasonable
