@@ -1,5 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0
-obj-y := core.o tp_stub.o
+obj-y := core.o
+ifeq ($(CONFIG_BPF_EVENTS),)
+obj-$(CONFIG_BPF_SYSCALL) += tp_stub.o
+endif
 ifneq ($(CONFIG_BPF_JIT_ALWAYS_ON),y)
 # ___bpf_prog_run() needs GCSE disabled on x86; see 3193c0836f203 for details
 cflags-nogcse-$(CONFIG_X86)$(CONFIG_CC_IS_GCC) := -fno-gcse
