@@ -3178,7 +3178,6 @@ static int goodix_ts_probe(struct platform_device *pdev)
 		ts_err("goodix device confirm failed[skip]");
 		goto out;
 	}
-	msleep(100);
 
 	/* Try start a thread to get config-bin info */
 	r = goodix_start_later_init(core_data);
