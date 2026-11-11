@@ -59,8 +59,7 @@ static bool initcalls_done;
 
 /* Save the async probe drivers' name from kernel cmdline */
 #define ASYNC_DRV_NAMES_MAX_LEN	256
-static char async_probe_drv_names[ASYNC_DRV_NAMES_MAX_LEN] =
-	"gtx8,goodix_ts,aw8624_haptic,nq-nci,ln8000_charger,bq2597x-charger";
+static char async_probe_drv_names[ASYNC_DRV_NAMES_MAX_LEN];
 
 /*
  * In some cases, like suspend to RAM or hibernation, It might be reasonable
@@ -819,27 +818,6 @@ static inline int lock_parent(struct device *dev)
 }
 #endif
 
-static void __driver_attach_async_helper(void *_dev, async_cookie_t cookie)
-{
-	struct device *dev = _dev;
-	struct device_driver *drv;
-	int ret = 0;
-
-	if (lock_parent(dev))	/* Needed for USB */
-		device_lock(dev->parent);
-	device_lock(dev);
-	drv = dev->p->async_driver;
-	if (!dev->driver)
-		ret = driver_probe_device(drv, dev);
-	device_unlock(dev);
-	if (lock_parent(dev))
-		device_unlock(dev->parent);
-
-	dev_dbg(dev, "driver %s async attach completed: %d\n", drv->name, ret);
-
-	put_device(dev);
-}
-
 static int __driver_attach(struct device *dev, void *data)
 {
 	struct device_driver *drv = data;
@@ -875,20 +853,6 @@ static int __driver_attach(struct device *dev, void *data)
 		 */
 		return 0;
 	} /* ret > 0 means positive match */
-
-	if (cmdline_requested_async_probing(drv->name) ||
-	    module_requested_async_probing(drv->owner)) {
-		/* Probe asynchronously if explicitly requested. */
-		dev_dbg(dev, "probing driver %s asynchronously\n", drv->name);
-		device_lock(dev);
-		if (!dev->driver) {
-			get_device(dev);
-			dev->p->async_driver = drv;
-			async_schedule(__driver_attach_async_helper, dev);
-		}
-		device_unlock(dev);
-		return 0;
-	}
 
 	if (lock_parent(dev))	/* Needed for USB */
 		device_lock(dev->parent);
