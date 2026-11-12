@@ -20,6 +20,7 @@
 #include <linux/sched/debug.h>
 #include <linux/sched/task.h>
 #include <linux/interrupt.h>
+#include <linux/delay.h>
 #include <linux/mm.h>
 #include <linux/fs.h>
 #include <linux/mount.h>
@@ -34,6 +35,7 @@
 #include <linux/perf_event.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/kthread.h>
 #include <linux/suspend.h>
 #include <linux/writeback.h>
 #include <linux/swap.h>
@@ -83,6 +85,49 @@ static int __init sysrq_always_enabled_setup(char *str)
 }
 
 __setup("sysrq_always_enabled", sysrq_always_enabled_setup);
+
+static unsigned int taskdump_after;
+
+static int __init taskdump_after_setup(char *str)
+{
+	int ret;
+
+	ret = kstrtouint(str, 0, &taskdump_after);
+	if (ret || !taskdump_after || taskdump_after > 600) {
+		pr_err("taskdump_after must be between 1 and 600 seconds\n");
+		taskdump_after = 0;
+	}
+
+	return 1;
+}
+__setup("taskdump_after=", taskdump_after_setup);
+
+static int taskdump_thread(void *unused)
+{
+	msleep(taskdump_after * MSEC_PER_SEC);
+	pr_emerg("taskdump_after: dumping blocked tasks via SysRq-w\n");
+	__handle_sysrq('w', false);
+
+	return 0;
+}
+
+static int __init taskdump_init(void)
+{
+	struct task_struct *task;
+
+	if (!taskdump_after)
+		return 0;
+
+	task = kthread_run(taskdump_thread, NULL, "taskdump");
+	if (IS_ERR(task)) {
+		pr_err("taskdump_after: failed to start dump thread: %ld\n",
+		       PTR_ERR(task));
+		return PTR_ERR(task);
+	}
+
+	return 0;
+}
+late_initcall(taskdump_init);
 
 
 static void sysrq_handle_loglevel(int key)
