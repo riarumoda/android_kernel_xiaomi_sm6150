@@ -1036,28 +1036,39 @@ static int aw882xx_codec_probe(aw_snd_soc_codec_t *aw_codec)
 		aw_componet_codec_ops.codec_get_drvdata(aw_codec);
 	aw_dev_info(aw882xx->dev, "enter");
 
+	aw_dev_info(aw882xx->dev, "probe stage: creating workqueue");
 	aw882xx->work_queue = create_singlethread_workqueue("aw882xx");
 	if (!aw882xx->work_queue) {
 		aw_dev_err(aw882xx->dev, "create workqueue failed !");
 		return -EINVAL;
 	}
+	aw_dev_info(aw882xx->dev, "probe stage: workqueue created");
 
 	INIT_DELAYED_WORK(&aw882xx->start_work, aw882xx_startup_work);
 	INIT_DELAYED_WORK(&aw882xx->interrupt_work, aw882xx_interrupt_work);
 
 	aw882xx->codec = aw_codec;
 
-	if (aw882xx->index == 0)
+	if (aw882xx->index == 0) {
+		aw_dev_info(aw882xx->dev, "probe stage: adding codec controls");
 		aw882xx_add_codec_controls(aw882xx);
+		aw_dev_info(aw882xx->dev, "probe stage: codec controls added");
+	}
 
 	/*load fw bin*/
+	aw_dev_info(aw882xx->dev, "probe stage: requesting firmware");
 	aw882xx_request_firmware_file(aw882xx);
+	aw_dev_info(aw882xx->dev, "probe stage: firmware request queued");
 
 	/*load monitor bin*/
+	aw_dev_info(aw882xx->dev, "probe stage: requesting monitor firmware");
 	aw_monitor_load_firmware(&aw882xx->aw_pa->monitor_desc);
+	aw_dev_info(aw882xx->dev, "probe stage: monitor firmware request queued");
 
 	/*load cali re*/
+	aw_dev_info(aw882xx->dev, "probe stage: calibration init start");
 	aw_dev_init_cali_re(aw882xx->aw_pa);
+	aw_dev_info(aw882xx->dev, "probe stage: calibration init complete");
 
 	return 0;
 }
@@ -1928,6 +1939,5 @@ module_exit(aw882xx_i2c_exit);
 
 MODULE_DESCRIPTION("ASoC AW882XX Smart PA Driver");
 MODULE_LICENSE("GPL v2");
-
 
 

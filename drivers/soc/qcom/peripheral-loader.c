@@ -1267,8 +1267,13 @@ int pil_boot(struct pil_desc *desc)
 	struct pil_priv *priv = desc->priv;
 	bool mem_protect = false;
 	bool hyp_assign = false;
+	bool modem_boot = !strcmp(desc->name, "modem");
 
+	if (modem_boot)
+		pil_info(desc, "boot stage: notify_aop start\n");
 	ret = pil_notify_aop(desc, "on");
+	if (modem_boot)
+		pil_info(desc, "boot stage: notify_aop complete, rc:%d\n", ret);
 	if (ret < 0) {
 		pil_err(desc, "Failed to send ON message to AOP rc:%d\n", ret);
 		return ret;
@@ -1280,9 +1285,18 @@ int pil_boot(struct pil_desc *desc)
 	/* Reinitialize for new image */
 	pil_release_mmap(desc);
 
+	if (modem_boot)
+		pil_info(desc, "boot stage: waiting for PIL PM read lock\n");
 	down_read(&pil_pm_rwsem);
+	if (modem_boot)
+		pil_info(desc, "boot stage: PIL PM read lock acquired\n");
 	snprintf(fw_name, sizeof(fw_name), "%s.mdt", desc->fw_name);
+	if (modem_boot)
+		pil_info(desc, "boot stage: requesting %s\n", fw_name);
 	ret = request_firmware(&fw, fw_name, desc->dev);
+	if (modem_boot)
+		pil_info(desc, "boot stage: firmware request complete, rc:%d\n",
+			 ret);
 	if (ret) {
 		pil_err(desc, "Failed to locate %s(rc:%d)\n", fw_name, ret);
 		goto out;
@@ -1315,29 +1329,47 @@ int pil_boot(struct pil_desc *desc)
 		goto release_fw;
 	}
 
+	if (modem_boot)
+		pil_info(desc, "boot stage: memory map initialization start\n");
 	ret = pil_init_mmap(desc, mdt);
+	if (modem_boot)
+		pil_info(desc, "boot stage: memory map initialization complete, rc:%d\n",
+			 ret);
 	if (ret)
 		goto release_fw;
 
 	desc->priv->unvoted_flag = 0;
+	if (modem_boot)
+		pil_info(desc, "boot stage: proxy vote start\n");
 	ret = pil_proxy_vote(desc);
+	if (modem_boot)
+		pil_info(desc, "boot stage: proxy vote complete, rc:%d\n", ret);
 	if (ret) {
 		pil_err(desc, "Failed to proxy vote(rc:%d)\n", ret);
 		goto release_fw;
 	}
 
 	pil_log("before_init_image", desc);
+	if (modem_boot)
+		pil_info(desc, "boot stage: image initialization start\n");
 	if (desc->ops->init_image)
 		ret = desc->ops->init_image(desc, fw->data, fw->size);
+	if (modem_boot)
+		pil_info(desc, "boot stage: image initialization complete, rc:%d\n",
+			 ret);
 	if (ret) {
 		pil_err(desc, "Initializing image failed(rc:%d)\n", ret);
 		goto err_boot;
 	}
 
 	pil_log("before_mem_setup", desc);
+	if (modem_boot)
+		pil_info(desc, "boot stage: memory setup start\n");
 	if (desc->ops->mem_setup)
 		ret = desc->ops->mem_setup(desc, priv->region_start,
 				priv->region_end - priv->region_start);
+	if (modem_boot)
+		pil_info(desc, "boot stage: memory setup complete, rc:%d\n", ret);
 	if (ret) {
 		pil_err(desc, "Memory setup error(rc:%d)\n", ret);
 		goto err_deinit_image;
@@ -1351,6 +1383,8 @@ int pil_boot(struct pil_desc *desc)
 		 * after MBA is booted
 		 */
 		pil_log("before_assign_mem", desc);
+		if (modem_boot)
+			pil_info(desc, "boot stage: memory assignment start\n");
 		if (desc->modem_ssr) {
 			ret = pil_assign_mem_to_linux(desc, priv->region_start,
 				(priv->region_end - priv->region_start));
@@ -1367,9 +1401,13 @@ int pil_boot(struct pil_desc *desc)
 			goto err_deinit_image;
 		}
 		hyp_assign = true;
+		if (modem_boot)
+			pil_info(desc, "boot stage: memory assignment complete\n");
 	}
 
 	pil_log("before_load_seg", desc);
+	if (modem_boot)
+		pil_info(desc, "boot stage: segment loading start\n");
 
 	/**
 	 * Fallback to serial loading of blobs if the
@@ -1386,12 +1424,20 @@ int pil_boot(struct pil_desc *desc)
 				goto err_deinit_image;
 		}
 	}
+	if (modem_boot)
+		pil_info(desc, "boot stage: segment loading complete, rc:%d\n",
+			 ret);
 
 	if (desc->subsys_vmid > 0) {
 		pil_log("before_reclaim_mem", desc);
+		if (modem_boot)
+			pil_info(desc, "boot stage: memory reclaim start\n");
 		ret =  pil_reclaim_mem(desc, priv->region_start,
 				(priv->region_end - priv->region_start),
 				desc->subsys_vmid);
+		if (modem_boot)
+			pil_info(desc, "boot stage: memory reclaim complete, rc:%d\n",
+				 ret);
 		if (ret) {
 			pil_err(desc, "Failed to assign %s memory, ret - %d\n",
 							desc->name, ret);
@@ -1401,7 +1447,12 @@ int pil_boot(struct pil_desc *desc)
 	}
 
 	pil_log("before_auth_reset", desc);
+	if (modem_boot)
+		pil_info(desc, "boot stage: auth_and_reset start\n");
 	ret = desc->ops->auth_and_reset(desc);
+	if (modem_boot)
+		pil_info(desc, "boot stage: auth_and_reset complete, rc:%d\n",
+			 ret);
 	if (ret) {
 		pil_err(desc, "Failed to bring out of reset(rc:%d)\n", ret);
 		goto err_auth_and_reset;
