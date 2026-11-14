@@ -12,21 +12,18 @@
 #include <trace/events/vmscan.h>
 #include <trace/events/oom.h>
 #include <trace/events/power.h>
-#include <trace/events/gpu_mem.h>
 
 /* Export tracepoint symbols for BPF programs */
 EXPORT_TRACEPOINT_SYMBOL(sched_process_exit);
 EXPORT_TRACEPOINT_SYMBOL(sched_process_fork);
 EXPORT_TRACEPOINT_SYMBOL(sched_switch);
-EXPORT_TRACEPOINT_SYMBOL(vmscan_mm_vmscan_direct_reclaim_begin);
-EXPORT_TRACEPOINT_SYMBOL(vmscan_mm_vmscan_direct_reclaim_end);
-EXPORT_TRACEPOINT_SYMBOL(vmscan_mm_vmscan_kswapd_sleep);
-EXPORT_TRACEPOINT_SYMBOL(vmscan_mm_vmscan_kswapd_wake);
-EXPORT_TRACEPOINT_SYMBOL(oom_mark_victim);
-EXPORT_TRACEPOINT_SYMBOL(power_cpu_frequency);
-EXPORT_TRACEPOINT_SYMBOL(power_cpu_frequency_limits);
-EXPORT_TRACEPOINT_SYMBOL(scheduler_sched_cpu_util);
-EXPORT_TRACEPOINT_SYMBOL(gpu_mem_total);
+EXPORT_TRACEPOINT_SYMBOL(mm_vmscan_direct_reclaim_begin);
+EXPORT_TRACEPOINT_SYMBOL(mm_vmscan_direct_reclaim_end);
+EXPORT_TRACEPOINT_SYMBOL(mm_vmscan_kswapd_sleep);
+EXPORT_TRACEPOINT_SYMBOL(mm_vmscan_kswapd_wake);
+EXPORT_TRACEPOINT_SYMBOL(mark_victim);
+EXPORT_TRACEPOINT_SYMBOL(cpu_frequency_limits);
+EXPORT_TRACEPOINT_SYMBOL(sched_cpu_util);
 
 /* Weak symbols for optional tracepoints */
 const struct bpf_func_proto * __weak bpf_tracing_func_proto(
@@ -148,7 +145,8 @@ const struct bpf_verifier_ops struct_ops_verifier_ops = {
 const struct bpf_prog_ops struct_ops_prog_ops = {
 };
 
-/* LSM programs */
+/* bpf_lsm.c already provides these when CONFIG_BPF_LSM is set */
+#ifndef CONFIG_BPF_LSM
 const struct bpf_verifier_ops lsm_verifier_ops = {
 	.get_func_proto  = tp_stub_func_proto,
 	.is_valid_access = tp_stub_is_valid_access,
@@ -156,6 +154,7 @@ const struct bpf_verifier_ops lsm_verifier_ops = {
 
 const struct bpf_prog_ops lsm_prog_ops = {
 };
+#endif /* !CONFIG_BPF_LSM */
 
 /* CGROUP_SOCKOPT programs */
 const struct bpf_verifier_ops cgroup_sockopt_verifier_ops = {

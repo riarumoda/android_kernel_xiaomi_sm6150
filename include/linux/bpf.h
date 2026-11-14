@@ -12,6 +12,7 @@
 #include <linux/workqueue.h>
 #include <linux/file.h>
 #include <linux/percpu.h>
+#include <linux/percpu-refcount.h>
 #include <linux/err.h>
 #include <linux/rbtree_latch.h>
 #include <linux/numa.h>
