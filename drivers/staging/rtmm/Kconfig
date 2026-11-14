@@ -4,3 +4,11 @@ config RTMM
 	default n
 	help
 	  Thie module is created by MIUI to optimize mem performance.
+
+config MI_RECLAIM
+	bool "enable mi reclaim"
+	select SYSFS
+	default n
+	help
+	  Anonymous page reclaim daemon.  Exposes /sys/kernel/mi_reclaim
+	  and drives mi_reclaim_global() in mm/vmscan.c.

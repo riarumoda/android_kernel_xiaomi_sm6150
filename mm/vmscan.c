@@ -60,6 +60,10 @@
 #include <linux/rtmm.h>
 #endif
 
+#ifdef CONFIG_MI_RECLAIM
+#include <linux/mi_reclaim.h>
+#endif
+
 #include "internal.h"
 
 #define CREATE_TRACE_POINTS
@@ -2327,6 +2331,10 @@ static void get_scan_count(struct lruvec *lruvec, struct mem_cgroup *memcg,
 	if (!sc->may_swap || mem_cgroup_get_nr_swap_pages(memcg) <= 0) {
 #endif /* CONFIG_OPLUS_MM_HACKS */
 		scan_balance = SCAN_FILE;
+#ifdef CONFIG_MI_RECLAIM
+		if (mi_reclaim(current->comm))
+			scan_balance = SCAN_ANON;
+#endif
 		goto out;
 	}
 
@@ -2339,6 +2347,10 @@ static void get_scan_count(struct lruvec *lruvec, struct mem_cgroup *memcg,
 	 */
 	if (!global_reclaim(sc) && !swappiness) {
 		scan_balance = SCAN_FILE;
+#ifdef CONFIG_MI_RECLAIM
+		if (mi_reclaim(current->comm))
+			scan_balance = SCAN_ANON;
+#endif
 		goto out;
 	}
 
@@ -3800,6 +3812,33 @@ void wakeup_kswapd(struct zone *zone, int order, enum zone_type classzone_idx)
 	trace_mm_vmscan_wakeup_kswapd(pgdat->node_id, classzone_idx, order);
 	wake_up_interruptible(&pgdat->kswapd_wait);
 }
+
+#ifdef CONFIG_MI_RECLAIM
+unsigned long mi_reclaim_global(unsigned long nr_to_reclaim, int page_type)
+{
+	struct reclaim_state reclaim_state;
+	struct scan_control sc = {
+		.nr_to_reclaim = max(nr_to_reclaim, SWAP_CLUSTER_MAX),
+		.gfp_mask = GFP_HIGHUSER_MOVABLE,
+		.reclaim_idx = gfp_zone(GFP_HIGHUSER_MOVABLE),
+		.order = 0,
+		.priority = DEF_PRIORITY,
+		.may_writepage = !!(page_type & 4),
+		.may_unmap = !!(page_type & 1),
+		.may_swap = !!(page_type & 2),
+	};
+	struct zonelist *zonelist = node_zonelist(numa_node_id(), sc.gfp_mask);
+	unsigned long nr_reclaimed;
+
+	reclaim_state.reclaimed_slab = 0;
+	current->reclaim_state = &reclaim_state;
+
+	nr_reclaimed = do_try_to_free_pages(zonelist, &sc);
+
+	current->reclaim_state = NULL;
+	return nr_reclaimed;
+}
+#endif /* CONFIG_MI_RECLAIM */
 
 #ifdef CONFIG_HIBERNATION
 /*
