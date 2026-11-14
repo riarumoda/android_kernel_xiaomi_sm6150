@@ -21,7 +21,9 @@
 #include <openssl/bio.h>
 #include <openssl/pem.h>
 #include <openssl/err.h>
+#ifndef OPENSSL_NO_ENGINE
 #include <openssl/engine.h>
+#endif
 
 /*
  * OpenSSL 3.0 deprecates the OpenSSL's ENGINE API.
@@ -56,7 +58,7 @@ static void display_openssl_errors(int l)
 	}
 }
 
-#ifndef OPENSSL_IS_BORINGSSL
+#if !defined(OPENSSL_IS_BORINGSSL) && !defined(OPENSSL_NO_ENGINE)
 static void drain_openssl_errors(void)
 {
 	const char *file;
@@ -77,7 +79,9 @@ static void drain_openssl_errors(void)
 		}					\
 	} while(0)
 
+#if !defined(OPENSSL_NO_ENGINE) && !defined(OPENSSL_IS_BORINGSSL)
 static const char *key_pass;
+#endif
 static BIO *wb;
 static char *cert_dst;
 int kbuild_verbose;
@@ -106,7 +110,9 @@ int main(int argc, char **argv)
 
 	kbuild_verbose = atoi(getenv("KBUILD_VERBOSE")?:"0");
 
-        key_pass = getenv("KBUILD_SIGN_PIN");
+#if !defined(OPENSSL_NO_ENGINE) && !defined(OPENSSL_IS_BORINGSSL)
+	key_pass = getenv("KBUILD_SIGN_PIN");
+#endif
 
 	if (argc != 3)
 		format();
@@ -121,8 +127,8 @@ int main(int argc, char **argv)
 		fclose(f);
 		exit(0);
 	} else if (!strncmp(cert_src, "pkcs11:", 7)) {
-#ifdef OPENSSL_IS_BORINGSSL
-		ERR(1, "BoringSSL does not support extracting from PKCS#11");
+#if defined(OPENSSL_NO_ENGINE) || defined(OPENSSL_IS_BORINGSSL)
+		ERR(1, "This OpenSSL build does not support extracting from PKCS#11");
 		exit(1);
 #else
 		ENGINE *e;
