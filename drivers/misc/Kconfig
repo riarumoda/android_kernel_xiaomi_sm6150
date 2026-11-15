@@ -627,6 +627,13 @@ config LDO_WL2866D
 	---help---
 	  This option enables multi ldo wl2866d.
 
+config SIMTRAY_STATUS
+	tristate "SIM tray status"
+	default n
+	help
+	  Say Y here to expose the SIM tray insertion state through a
+	  read-only sysfs attribute.
+
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"
