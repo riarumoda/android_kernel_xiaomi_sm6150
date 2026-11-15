@@ -1,0 +1,6 @@
+config MILLET
+	bool "Millet event reporting framework"
+	depends on NETFILTER
+	default n
+	help
+	  Framework that forwards kernel events to user space over netlink.

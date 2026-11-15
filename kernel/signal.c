@@ -45,6 +45,7 @@
 #include <linux/oom.h>
 #include <linux/capability.h>
 #include <linux/cgroup.h>
+#include <linux/millet.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/signal.h>
@@ -1156,10 +1157,61 @@ ret:
 	return ret;
 }
 
+#ifdef CONFIG_MILLET
+static u32 last_report_task;
+
+static int signals_sendmsg(struct task_struct *task, struct millet_msg *msg,
+			   struct millet *millet)
+{
+	u32 *last;
+
+	if (!task || !msg || !millet) {
+		pr_err("%s input invalid\n", __func__);
+		return -1;
+	}
+
+	msg->status = task->tgid;
+	msg->uid = task_uid(task).val;
+	msg->msg = MILLET_MSG_REPORT;
+	msg->module = MILLET_MOD_SIG;
+
+	if (!freezing(task) && !(task->flags & PF_FROZEN))
+		return 0;
+
+	last = millet->ch[MILLET_MOD_BINDER - 1].priv;
+	if (last) {
+		if (*last == msg->status)
+			return 0;
+		*last = msg->status;
+	}
+
+	return millet_sendto_user(task, msg, millet);
+}
+
+static void signas_init_millet(struct millet *millet)
+{
+	if (!millet)
+		return;
+
+	millet->ch[MILLET_MOD_SIG - 1].out_id = MILLET_MOD_SIG;
+	millet->ch[MILLET_MOD_BINDER - 1].priv = &last_report_task;
+}
+#endif
+
 static int send_signal(int sig, struct siginfo *info, struct task_struct *t,
 			int group)
 {
 	int from_ancestor_ns = 0;
+#ifdef CONFIG_MILLET
+	if (sig <= 0xf && ((1 << sig) & 0x8248)) {
+		struct millet_msg msg;
+
+		memset(&msg, 0, sizeof(msg));
+		msg.field_68.task = current;
+		msg.field_70.task = t;
+		millet_sendmsg(MILLET_MOD_SIG, t, &msg);
+	}
+#endif
 
 #ifdef CONFIG_PID_NS
 	from_ancestor_ns = si_fromuser(info) &&
@@ -3997,6 +4049,10 @@ void __init signals_init(void)
 		!= offsetof(struct siginfo, _sifields._pad));
 
 	sigqueue_cachep = KMEM_CACHE(sigqueue, SLAB_PANIC);
+#ifdef CONFIG_MILLET
+	register_millet_hook(MILLET_MOD_SIG, NULL, signals_sendmsg,
+			     signas_init_millet);
+#endif
 }
 
 #ifdef CONFIG_KGDB_KDB

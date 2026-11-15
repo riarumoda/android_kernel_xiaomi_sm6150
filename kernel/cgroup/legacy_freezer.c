@@ -22,6 +22,7 @@
 #include <linux/freezer.h>
 #include <linux/seq_file.h>
 #include <linux/mutex.h>
+#include <linux/millet.h>
 
 /*
  * A cgroup is freezing if any FREEZING flags are set.  FREEZING_SELF is
@@ -470,12 +471,32 @@ static struct cftype files[] = {
 	{ }	/* terminate */
 };
 
+#ifdef CONFIG_MILLET
+static int freezer_can_attach(struct cgroup_taskset *tset)
+{
+	return millet_can_attach(tset);
+}
+
+static void millet_cancel_attach(struct cgroup_taskset *tset)
+{
+}
+
+static void freezer_cancel_attach(struct cgroup_taskset *tset)
+{
+	millet_cancel_attach(tset);
+}
+#endif
+
 struct cgroup_subsys freezer_cgrp_subsys = {
 	.css_alloc	= freezer_css_alloc,
 	.css_online	= freezer_css_online,
 	.css_offline	= freezer_css_offline,
 	.css_free	= freezer_css_free,
 	.attach		= freezer_attach,
+#ifdef CONFIG_MILLET
+	.can_attach	= freezer_can_attach,
+	.cancel_attach	= freezer_cancel_attach,
+#endif
 	.fork		= freezer_fork,
 	.legacy_cftypes	= files,
 };

@@ -58,6 +58,7 @@
 #include <linux/fs.h>
 #include <linux/list.h>
 #include <linux/miscdevice.h>
+#include <linux/millet.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/nsproxy.h>
@@ -3159,6 +3160,169 @@ static struct binder_node *binder_get_node_refs_for_txn(
 	return target_node;
 }
 
+#ifdef CONFIG_MILLET
+static void binder_millet_report(struct binder_proc *proc,
+				 struct task_struct *target,
+				 u32 from_pid, u32 flags, u32 code,
+				 u32 subtype)
+{
+	struct millet_msg msg;
+
+	if (!target)
+		return;
+
+	memset(&msg, 0, sizeof(msg));
+	msg.subtype = subtype;
+	msg.field_68.task = proc->tsk;
+	msg.field_70.task = target;
+	msg.from_pid = from_pid;
+	msg.flags = flags;
+	msg.code = code;
+	millet_sendmsg(MILLET_MOD_BINDER, target, &msg);
+}
+
+static int binder_sendmsg(struct task_struct *task, struct millet_msg *msg,
+			  struct millet *millet)
+{
+	if (!task || !msg || !millet) {
+		pr_err("binder: %s input invalid\n", __func__);
+		return -1;
+	}
+
+	msg->msg = MILLET_MSG_REPORT;
+	msg->module = MILLET_MOD_BINDER;
+	msg->pid = msg->field_68.task->pid;
+	msg->status = task_uid(msg->field_68.task).val;
+	msg->peer_pid = msg->field_70.task->pid;
+	msg->uid = task_uid(msg->field_70.task).val;
+
+	if (!freezing(msg->field_68.task) &&
+	    !(msg->field_68.task->flags & PF_FROZEN))
+		return 0;
+
+	return millet_sendto_user(task, msg, millet);
+}
+
+static void binder_init_millet(struct millet *millet)
+{
+	if (!millet)
+		return;
+
+	millet->ch[MILLET_MOD_BINDER - 1].out_id = MILLET_MOD_BINDER;
+}
+
+static int binder_st_sendmsg(struct task_struct *task, struct millet_msg *msg,
+			     struct millet *millet)
+{
+	if (!task || !msg || !millet) {
+		pr_err("binder: %s input invalid\n", __func__);
+		return -1;
+	}
+
+	msg->msg = MILLET_MSG_REPORT;
+	msg->module = MILLET_MOD_BINDER_STAT;
+
+	return millet_sendto_user(task, msg, millet);
+}
+
+static void binder_st_init_millet(struct millet *millet)
+{
+	if (!millet)
+		return;
+
+	millet->ch[MILLET_MOD_BINDER_STAT - 1].out_id = MILLET_MOD_BINDER;
+}
+
+static int binder_recv_hook(void *msg, u32 len)
+{
+	struct millet_cmd *cmd = msg;
+	struct millet_msg report;
+	struct binder_proc *proc;
+	struct binder_transaction *txn;
+	struct binder_thread *thread;
+	struct rb_node *node;
+	struct task_struct *target;
+	u32 uid = cmd->cmd;
+	bool reported = false;
+
+	mutex_lock(&binder_procs_lock);
+
+	hlist_for_each_entry(proc, &binder_procs, proc_node) {
+		if (!proc->tsk)
+			continue;
+		if (task_uid(proc->tsk).val != uid)
+			continue;
+
+		binder_inner_proc_lock(proc);
+
+		if (!binder_worklist_empty_ilocked(&proc->todo)) {
+			target = proc->tsk;
+			memset(&report, 0, sizeof(report));
+			report.uid = uid;
+			report.status = 3;
+			report.field_68.task = proc->tsk;
+			report.field_70.tgid = proc->tsk->pid;
+			binder_inner_proc_unlock(proc);
+			millet_sendmsg(MILLET_MOD_BINDER_STAT, target,
+				       &report);
+			reported = true;
+			continue;
+		}
+
+		target = NULL;
+		for (node = rb_first(&proc->threads); node; node = rb_next(node)) {
+			thread = rb_entry(node, struct binder_thread, rb_node);
+			if (!thread->task)
+				continue;
+			if (!binder_worklist_empty_ilocked(&thread->todo)) {
+				target = thread->task;
+				memset(&report, 0, sizeof(report));
+				report.uid = uid;
+				report.status = 2;
+				report.field_68.task = thread->task;
+				report.field_70.tgid = thread->task->tgid;
+				report.field_70.tid = thread->pid;
+				break;
+			}
+			txn = thread->transaction_stack;
+			if (!txn)
+				continue;
+			spin_lock(&txn->lock);
+			txn = thread->transaction_stack;
+			if (txn && txn->to_thread == thread) {
+				target = thread->task;
+				memset(&report, 0, sizeof(report));
+				report.uid = uid;
+				report.status = 4;
+				report.field_68.task = thread->task;
+				report.field_70.tgid = thread->task->tgid;
+				report.field_70.tid = thread->pid;
+				spin_unlock(&txn->lock);
+				break;
+			}
+			spin_unlock(&txn->lock);
+		}
+
+		binder_inner_proc_unlock(proc);
+
+		if (target) {
+			millet_sendmsg(MILLET_MOD_BINDER_STAT, target, &report);
+			reported = true;
+		}
+	}
+
+	memset(&report, 0, sizeof(report));
+	report.uid = uid;
+	report.status = reported ? 1 : 0;
+	report.field_68.task = current;
+	millet_sendmsg(MILLET_MOD_BINDER_STAT, current, &report);
+
+	mutex_unlock(&binder_procs_lock);
+
+	return 0;
+}
+#endif
+
 static void binder_transaction(struct binder_proc *proc,
 			       struct binder_thread *thread,
 			       struct binder_transaction_data *tr, int reply,
@@ -3250,6 +3414,15 @@ static void binder_transaction(struct binder_proc *proc,
 		target_proc = target_thread->proc;
 		atomic_inc(&target_proc->tmp_ref);
 		binder_inner_proc_unlock(target_thread->proc);
+#ifdef CONFIG_MILLET
+		if (target_proc->tsk &&
+		    task_uid(target_proc->tsk).val <= frozen_uid_min)
+			binder_millet_report(proc, target_proc->tsk,
+					     thread->pid,
+					     tr->flags & TF_ONE_WAY,
+					     tr->code,
+					     MILLET_BINDER_SUB_REPLY);
+#endif
 	} else {
 		if (tr->target.handle) {
 			struct binder_ref *ref;
@@ -3302,6 +3475,16 @@ static void binder_transaction(struct binder_proc *proc,
 			goto err_dead_binder;
 		}
 		e->to_node = target_node->debug_id;
+#ifdef CONFIG_MILLET
+		if (target_proc->tsk &&
+		    task_uid(target_proc->tsk).val > frozen_uid_min &&
+		    proc->pid != target_proc->pid)
+			binder_millet_report(proc, target_proc->tsk,
+					     thread->pid,
+					     tr->flags & TF_ONE_WAY,
+					     tr->code,
+					     MILLET_BINDER_SUB_CALL);
+#endif
 		if (security_binder_transaction(proc->cred,
 						target_proc->cred) < 0) {
 			return_error = BR_FAILED_REPLY;
@@ -3457,6 +3640,28 @@ static void binder_transaction(struct binder_proc *proc,
 
 	trace_binder_transaction(reply, t, target_node);
 
+#ifdef CONFIG_MILLET
+	if (!reply && (t->flags & TF_ONE_WAY) && target_proc->tsk) {
+		size_t millet_size;
+
+		millet_size = ALIGN(tr->data_size, sizeof(u64)) +
+			      ALIGN(tr->offsets_size, sizeof(u64)) +
+			      ALIGN(extra_buffers_size, sizeof(u64));
+		millet_size = max(millet_size, (size_t)sizeof(u64));
+
+		if (target_proc->alloc.free_async_space <
+				3 * (millet_size + 0x60) ||
+		    target_proc->alloc.free_async_space < 0x20000) {
+			struct millet_msg msg;
+
+			memset(&msg, 0, sizeof(msg));
+			msg.field_68.task = current;
+			msg.field_70.task = target_proc->tsk;
+			millet_sendmsg(MILLET_MOD_BINDER, target_proc->tsk,
+				       &msg);
+		}
+	}
+#endif
 	t->buffer = binder_alloc_new_buf(&target_proc->alloc, tr->data_size,
 		tr->offsets_size, extra_buffers_size,
 		!reply && (t->flags & TF_ONE_WAY), current->tgid);
@@ -4391,6 +4596,23 @@ static int binder_wait_for_work(struct binder_thread *thread,
 		prepare_to_wait(&thread->wait, &wait, TASK_INTERRUPTIBLE);
 		if (binder_has_work_ilocked(thread, do_proc_work))
 			break;
+#ifdef CONFIG_MILLET
+		if (thread->transaction_stack) {
+			struct binder_transaction *txn;
+
+			txn = thread->transaction_stack;
+			if (txn->to_proc && !(txn->flags & TF_ONE_WAY) &&
+			    txn->to_proc->tsk &&
+			    task_uid(txn->to_proc->tsk).val <= frozen_uid_min &&
+			    thread->proc->pid != txn->to_proc->pid)
+				binder_millet_report(thread->proc,
+						     txn->to_proc->tsk,
+						     thread->pid,
+						     txn->flags & TF_ONE_WAY,
+						     txn->code,
+						     MILLET_BINDER_SUB_WAIT);
+		}
+#endif
 		if (do_proc_work)
 			list_add(&thread->waiting_thread_node,
 				 &proc->waiting_threads);
@@ -6629,6 +6851,12 @@ static int __init binder_init(void)
 	if (ret)
 		goto err_init_binder_device_failed;
 
+#ifdef CONFIG_MILLET
+	register_millet_hook(MILLET_MOD_BINDER, NULL, binder_sendmsg,
+			     binder_init_millet);
+	register_millet_hook(MILLET_MOD_BINDER_STAT, binder_recv_hook,
+			     binder_st_sendmsg, binder_st_init_millet);
+#endif
 	return ret;
 
 err_init_binder_device_failed:
