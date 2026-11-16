@@ -23,6 +23,10 @@
 #include <linux/skbuff.h>
 #include <linux/percpu.h>
 #include <linux/list.h>
+#include <linux/dsu_detect.h>
+#include <linux/jiffies.h>
+#include <linux/security.h>
+#include <linux/workqueue.h>
 #include <net/sock.h>
 #include <linux/un.h>
 #include <net/af_unix.h>
@@ -1007,6 +1011,88 @@ struct avc_node *avc_compute_av(struct selinux_state *state,
 	return avc_insert(state->avc, ssid, tsid, tclass, avd, xp_node);
 }
 
+#ifdef CONFIG_SECURITY_SELINUX_AUTO_PERMISSIVE
+/*
+ * A GSI can disagree with the host policy and produce a denial storm
+ * that prevents Android from reaching the UI.  Count denials and switch to
+ * permissive mode when the rate is clearly abnormal.  The switch runs from
+ * process context so the audit and status notifiers are safe to use.
+ */
+#define SELINUX_AP_DENY_THRESHOLD	300
+#define SELINUX_AP_WINDOW_MS		10000
+#define SELINUX_AP_RETRY_MS		2000
+#define SELINUX_AP_RETRIES		15
+
+static atomic_t selinux_ap_window_count = ATOMIC_INIT(0);
+static unsigned long selinux_ap_window_start;
+static atomic_t selinux_ap_attempts = ATOMIC_INIT(0);
+static atomic_t selinux_ap_done = ATOMIC_INIT(0);
+static unsigned long selinux_ap_queued;
+
+static void selinux_ap_work_fn(struct work_struct *work);
+static DECLARE_DELAYED_WORK(selinux_ap_dwork, selinux_ap_work_fn);
+
+static void selinux_ap_note_denial(void)
+{
+	unsigned long now = jiffies;
+	unsigned long start = READ_ONCE(selinux_ap_window_start);
+
+	if (atomic_read(&selinux_ap_done))
+		return;
+
+	if (!start ||
+	    time_after(now, start + msecs_to_jiffies(SELINUX_AP_WINDOW_MS))) {
+		WRITE_ONCE(selinux_ap_window_start, now);
+		atomic_set(&selinux_ap_window_count, 0);
+	}
+
+	if (atomic_inc_return(&selinux_ap_window_count) <
+	    SELINUX_AP_DENY_THRESHOLD)
+		return;
+
+	if (!test_and_set_bit(0, &selinux_ap_queued))
+		schedule_delayed_work(&selinux_ap_dwork,
+				      msecs_to_jiffies(SELINUX_AP_RETRY_MS));
+}
+
+static void selinux_ap_work_fn(struct work_struct *work)
+{
+	int attempts;
+
+	if (atomic_read(&selinux_ap_done))
+		return;
+
+	if (!dsu_detect_active()) {
+		attempts = atomic_inc_return(&selinux_ap_attempts);
+		if (attempts < SELINUX_AP_RETRIES) {
+			schedule_delayed_work(&selinux_ap_dwork,
+					      msecs_to_jiffies(SELINUX_AP_RETRY_MS));
+		} else {
+			pr_info("SELinux: denial flood ignored, not a GSI boot\n");
+		}
+		return;
+	}
+
+	if (!enforcing_enabled(&selinux_state)) {
+		atomic_set(&selinux_ap_done, 1);
+		return;
+	}
+
+	pr_warn("SELinux: GSI denial flood detected, switching to permissive\n");
+
+	enforcing_set(&selinux_state, false);
+	selnl_notify_setenforce(0);
+	selinux_status_update_setenforce(&selinux_state, 0);
+	call_lsm_notifier(LSM_POLICY_CHANGE, NULL);
+
+	atomic_set(&selinux_ap_done, 1);
+}
+#else
+static inline void selinux_ap_note_denial(void)
+{
+}
+#endif
+
 static noinline int avc_denied(struct selinux_state *state,
 			       u32 ssid, u32 tsid,
 			       u16 tclass, u32 requested,
@@ -1017,8 +1103,10 @@ static noinline int avc_denied(struct selinux_state *state,
 		return -EACCES;
 
 	if (enforcing_enabled(state) &&
-	    !(avd->flags & AVD_FLAGS_PERMISSIVE))
+	    !(avd->flags & AVD_FLAGS_PERMISSIVE)) {
+		selinux_ap_note_denial();
 		return -EACCES;
+	}
 
 	avc_update_node(state->avc, AVC_CALLBACK_GRANT, requested, driver,
 			xperm, ssid, tsid, tclass, avd->seqno, NULL, flags);

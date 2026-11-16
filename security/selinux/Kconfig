@@ -60,6 +60,21 @@ config SECURITY_SELINUX_DEVELOP
 	  permissive mode (if permitted by the policy) via
 	  /sys/fs/selinux/enforce.
 
+config SECURITY_SELINUX_AUTO_PERMISSIVE
+	bool "Automatically go permissive after a GSI denial flood"
+	depends on SECURITY_SELINUX && DSU_DETECT
+	depends on SECURITY_SELINUX_DEVELOP
+	default y
+	help
+	  A policy mismatch in a Generic System Image (GSI) can cause
+	  a flood of SELinux denials and prevent the system from reaching the
+	  UI.  When enabled, the kernel watches the denial rate and switches
+	  to permissive mode once it crosses a fixed threshold.
+
+	  Normal boots are not affected.
+
+	  If unsure, say N.
+
 config SECURITY_SELINUX_AVC_STATS
 	bool "NSA SELinux AVC Statistics"
 	depends on SECURITY_SELINUX
