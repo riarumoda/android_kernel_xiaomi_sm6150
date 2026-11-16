@@ -1059,6 +1059,9 @@ static void selinux_ap_work_fn(struct work_struct *work)
 {
 	int attempts;
 
+	/* Allow a later flood to queue the check again. */
+	clear_bit(0, &selinux_ap_queued);
+
 	if (atomic_read(&selinux_ap_done))
 		return;
 
@@ -1068,6 +1071,7 @@ static void selinux_ap_work_fn(struct work_struct *work)
 			schedule_delayed_work(&selinux_ap_dwork,
 					      msecs_to_jiffies(SELINUX_AP_RETRY_MS));
 		} else {
+			atomic_set(&selinux_ap_attempts, 0);
 			pr_info("SELinux: denial flood ignored, not a GSI boot\n");
 		}
 		return;
