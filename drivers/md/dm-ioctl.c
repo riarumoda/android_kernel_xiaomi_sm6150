@@ -18,6 +18,7 @@
 #include <linux/hdreg.h>
 #include <linux/compat.h>
 #include <linux/nospec.h>
+#include <linux/dsu_detect.h>
 
 #include <linux/uaccess.h>
 
@@ -766,6 +767,8 @@ static int dev_create(struct file *filp, struct dm_ioctl *param, size_t param_si
 		dm_destroy(md);
 		return r;
 	}
+
+	dsu_detect_note_dm_name(param->name);
 
 	param->flags &= ~DM_INACTIVE_PRESENT_FLAG;
 

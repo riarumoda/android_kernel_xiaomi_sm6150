@@ -634,6 +634,18 @@ config SIMTRAY_STATUS
 	  Say Y here to expose the SIM tray insertion state through a
 	  read-only sysfs attribute.
 
+config DSU_DETECT
+	bool "Dynamic System Update (DSU) detection"
+	help
+	  Detect when the device is running from a Dynamic System Update (DSU)
+	  image.  The result is exposed through /proc/dsu_detect.
+
+	  Detection watches the device-mapper devices created by first-stage
+	  init.  It can be forced with dsu_detect=1 or disabled with
+	  dsu_detect=0.
+
+	  If unsure, say N.
+
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"
