@@ -505,6 +505,7 @@ struct goodix_ts_core {
 	struct notifier_block power_supply_notif;
 	struct work_struct power_supply_work;
 	struct power_supply *battery_psy;
+	bool psy_notifier_registered;
 
 	struct proc_dir_entry *tp_fw_version_proc;
 	struct proc_dir_entry *tp_lockdown_info_proc;

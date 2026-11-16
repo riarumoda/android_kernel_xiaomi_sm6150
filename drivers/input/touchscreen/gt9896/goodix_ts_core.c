@@ -2089,11 +2089,6 @@ static void goodix_ts_suspend_work(struct work_struct *work)
 	goodix_ts_suspend(core_data);
 }
 
-enum {
-	CHARGER_ON = 1,
-	CHARGER_OFF = 2,
-}tp_charger_state;
-
 void goodix_charger_in(struct goodix_ts_core *core_data)
 {
 	struct goodix_ts_device *ts_dev = core_data->ts_dev;
@@ -2128,39 +2123,38 @@ static void goodix_charger_out(struct goodix_ts_core *core_data)
 static void goodix_power_supply_work(struct work_struct *work)
 {
 	int ret;
-	struct goodix_ts_core *core_data = container_of(work, struct goodix_ts_core, power_supply_work);
+	struct goodix_ts_core *core_data =
+		container_of(work, struct goodix_ts_core, power_supply_work);
 	union power_supply_propval cur_chgr = {0,};
-	static u8 is_usb_exit = 0;
+	bool charging;
 
-	if (!core_data->battery_psy) {
-		ts_err("battery psy is NULL, something error!!");
+	/* The battery driver may register after the touch controller. */
+	if (!core_data->battery_psy)
+		core_data->battery_psy = power_supply_get_by_name("battery");
+
+	if (!core_data->battery_psy)
 		return;
-	}
-	ret = power_supply_get_property(core_data->battery_psy, POWER_SUPPLY_PROP_STATUS, &cur_chgr);
+
+	ret = power_supply_get_property(core_data->battery_psy,
+					POWER_SUPPLY_PROP_STATUS, &cur_chgr);
 	if (ret < 0) {
-		ts_err("get psy property failed!!, skip charger mode handler");
+		ts_err("failed to get charger status, skipping update");
 		return;
 	}
 
-	switch (cur_chgr.intval) {
-	case CHARGER_ON:
-		if (0 == is_usb_exit) {
-			goodix_charger_in(core_data);
-			core_data->charger_status = 1;
-			is_usb_exit = 1;
-		}
-		break;
-	case CHARGER_OFF:
-		if (1 == is_usb_exit) {
-			goodix_charger_out(core_data);
-			core_data->charger_status = 0;
-			is_usb_exit = 0;
-		}
-		break;
-	default :
-		ts_err("unsupport charger state %d", cur_chgr.intval);
-		break;
-	}
+	charging = cur_chgr.intval == POWER_SUPPLY_STATUS_CHARGING ||
+		   cur_chgr.intval == POWER_SUPPLY_STATUS_FULL ||
+		   cur_chgr.intval == POWER_SUPPLY_STATUS_NOT_CHARGING;
+
+	if (charging == core_data->charger_status)
+		return;
+
+	if (charging)
+		goodix_charger_in(core_data);
+	else
+		goodix_charger_out(core_data);
+
+	core_data->charger_status = charging;
 }
 
 static int goodix_power_supply_event(struct notifier_block *nb, unsigned long event, void *ptr)
@@ -3216,20 +3210,15 @@ static int goodix_ts_probe(struct platform_device *pdev)
 	 * only for MTK platform
 	 * pm_qos_add_request(&core_data->tp_qos_request, PM_QOS_CPU_DMA_LATENCY, PM_QOS_DEFAULT_VALUE);
 	*/
-	/* is usb exit init */
-	/*
+	/* Register the charger notifier; the battery may still be probing. */
 	core_data->battery_psy = power_supply_get_by_name("battery");
-	if (!core_data->battery_psy) {
-		mdelay(50);
-		core_data->battery_psy = power_supply_get_by_name("battery");
-	}
-	*/
-	if (!core_data->battery_psy) {
-		ts_info("get battery psy failed, don't register callback for charger mode");
-	} else {
-		core_data->power_supply_notif.notifier_call = goodix_power_supply_event;
-		power_supply_reg_notifier(&core_data->power_supply_notif);
+	core_data->power_supply_notif.notifier_call = goodix_power_supply_event;
+	if (power_supply_reg_notifier(&core_data->power_supply_notif) == 0) {
+		core_data->psy_notifier_registered = true;
 		ts_info("register callback for charger mode successful");
+		schedule_work(&core_data->power_supply_work);
+	} else {
+		ts_err("failed to register charger notifier");
 	}
 	/* generic notifier callback */
 	/*
@@ -3344,6 +3333,15 @@ static int goodix_ts_remove(struct platform_device *pdev)
 	atomic_set(&core_data->initialized, 0);
 	if (atomic_read(&core_data->ts_esd.esd_on))
 		goodix_ts_esd_off(core_data);
+	if (core_data->psy_notifier_registered) {
+		power_supply_unreg_notifier(&core_data->power_supply_notif);
+		core_data->psy_notifier_registered = false;
+	}
+	cancel_work_sync(&core_data->power_supply_work);
+	if (core_data->battery_psy) {
+		power_supply_put(core_data->battery_psy);
+		core_data->battery_psy = NULL;
+	}
 #ifdef CONFIG_DRM
 	msm_drm_unregister_client(&core_data->msm_drm_notifier);
 #endif
