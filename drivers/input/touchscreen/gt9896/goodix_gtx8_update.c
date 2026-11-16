@@ -313,8 +313,12 @@ static int goodix_check_update(struct goodix_ts_device *dev,
 		if (ret == 0) {
 			ts_info("FW version is equal to the IC's");
 			return 0;
-		} else if (ret > 0) {
-			ts_info("Warning: fw version is lower the IC's");
+		}
+
+		/* Never downgrade the IC to the firmware bundled here. */
+		if (ret > 0) {
+			ts_info("FW on IC is newer, skip update");
+			return 0;
 		}
 	} /* else invalid firmware, update firmware */
 
