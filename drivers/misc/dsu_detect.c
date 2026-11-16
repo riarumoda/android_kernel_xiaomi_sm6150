@@ -4,34 +4,31 @@
  *
  * A DSU boot reuses the host kernel, so there is no bootloader flag to read.
  * First-stage init maps the DSU images with device-mapper names ending in
- * "_gsi".  This driver watches those mappings on its own and publishes the
- * result through /proc/dsu_detect.
+ * "_gsi".  The device-mapper ioctl path reports every created name here, so
+ * the result does not depend on sysfs access from a kernel thread.
  */
 
 #include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/fs.h>
+#include <linux/mutex.h>
 #include <linux/string.h>
-#include <linux/jiffies.h>
-#include <linux/workqueue.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/dsu_detect.h>
 
-#define DSU_DM_MAX		64
-#define DSU_SCAN_INTERVAL_MS	1000
-#define DSU_SCAN_TIMEOUT_MS	60000
+#define DSU_NAME_MAX		64
+#define DSU_MAX_MAPPINGS	32
 
 /* -1: auto, 0: off, 1: force on */
 static int dsu_forced = -1;
 
 static bool dsu_active;
 static bool dsu_logged;
-static unsigned long dsu_start;
 
-static void dsu_scan_work(struct work_struct *work);
-static DECLARE_DELAYED_WORK(dsu_work, dsu_scan_work);
+static DEFINE_MUTEX(dsu_lock);
+static char dsu_seen[DSU_MAX_MAPPINGS][DSU_NAME_MAX];
+static unsigned int dsu_seen_count;
 
 static int __init dsu_detect_setup(char *str)
 {
@@ -47,104 +44,16 @@ static int __init dsu_detect_setup(char *str)
 }
 __setup("dsu_detect=", dsu_detect_setup);
 
-struct dsu_dir_ctx {
-	struct dir_context ctx;
-	unsigned int count;
-};
-
-static int dsu_dir_actor(struct dir_context *ctx, const char *name, int namlen,
-			 loff_t offset, u64 ino, unsigned int d_type)
+static void dsu_mark_active(void)
 {
-	struct dsu_dir_ctx *dctx = container_of(ctx, struct dsu_dir_ctx, ctx);
-
-	if ((namlen == 1 && name[0] == '.') ||
-	    (namlen == 2 && name[0] == '.' && name[1] == '.'))
-		return 0;
-
-	dctx->count++;
-	return 0;
-}
-
-static bool dsu_dm_has_holders(int index)
-{
-	struct dsu_dir_ctx dctx = {
-		.ctx.actor = dsu_dir_actor,
-	};
-	struct file *filp;
-	char path[64];
-
-	snprintf(path, sizeof(path), "/sys/block/dm-%d/holders", index);
-
-	filp = filp_open(path, O_RDONLY | O_DIRECTORY, 0);
-	if (IS_ERR(filp))
-		return false;
-
-	iterate_dir(filp, &dctx.ctx);
-	filp_close(filp, NULL);
-
-	return dctx.count > 0;
-}
-
-static bool dsu_scan_dm(void)
-{
-	unsigned int gsi_count = 0;
-	bool in_use = false;
-	int i;
-
-	for (i = 0; i < DSU_DM_MAX; i++) {
-		char path[64];
-		char name[64];
-		struct file *filp;
-		ssize_t len;
-		loff_t pos = 0;
-
-		snprintf(path, sizeof(path), "/sys/block/dm-%d/dm/name", i);
-
-		filp = filp_open(path, O_RDONLY, 0);
-		if (IS_ERR(filp))
-			continue;
-
-		len = kernel_read(filp, name, sizeof(name) - 1, &pos);
-		filp_close(filp, NULL);
-
-		if (len <= 0)
-			continue;
-
-		name[len] = '\0';
-		strim(name);
-
-		if (!strstr(name, "_gsi"))
-			continue;
-
-		gsi_count++;
-		if (dsu_dm_has_holders(i))
-			in_use = true;
-	}
-
-	/*
-	 * A live DSU maps at least the system image and its userdata image.
-	 * A single temporary mapping (DSU installation) has no holder.
-	 */
-	return in_use || gsi_count >= 2;
-}
-
-static void dsu_scan_work(struct work_struct *work)
-{
-	if (dsu_forced == 0 || READ_ONCE(dsu_active))
+	if (READ_ONCE(dsu_active))
 		return;
 
-	if (dsu_forced == 1 || dsu_scan_dm()) {
-		WRITE_ONCE(dsu_active, true);
-		if (!READ_ONCE(dsu_logged)) {
-			WRITE_ONCE(dsu_logged, true);
-			pr_info("DSU detected\n");
-		}
-		return;
+	WRITE_ONCE(dsu_active, true);
+	if (!READ_ONCE(dsu_logged)) {
+		WRITE_ONCE(dsu_logged, true);
+		pr_info("DSU detected\n");
 	}
-
-	if (time_before(jiffies, dsu_start + msecs_to_jiffies(DSU_SCAN_TIMEOUT_MS)))
-		schedule_delayed_work(&dsu_work,
-				      msecs_to_jiffies(DSU_SCAN_INTERVAL_MS));
 }
 
 bool dsu_detect_active(void)
@@ -153,7 +62,7 @@ bool dsu_detect_active(void)
 		return true;
 
 	if (dsu_forced == 1) {
-		WRITE_ONCE(dsu_active, true);
+		dsu_mark_active();
 		return true;
 	}
 
@@ -163,12 +72,35 @@ EXPORT_SYMBOL_GPL(dsu_detect_active);
 
 void dsu_detect_note_dm_name(const char *name)
 {
+	unsigned int i;
+
 	if (!name || dsu_forced == 0 || READ_ONCE(dsu_active))
 		return;
 
-	if (strstr(name, "_gsi"))
-		schedule_delayed_work(&dsu_work,
-				      msecs_to_jiffies(DSU_SCAN_INTERVAL_MS));
+	if (!strstr(name, "_gsi"))
+		return;
+
+	mutex_lock(&dsu_lock);
+
+	for (i = 0; i < dsu_seen_count; i++) {
+		if (!strcmp(dsu_seen[i], name))
+			goto out;
+	}
+
+	if (dsu_seen_count >= DSU_MAX_MAPPINGS)
+		goto out;
+
+	strscpy(dsu_seen[dsu_seen_count], name, DSU_NAME_MAX);
+	dsu_seen_count++;
+
+	/*
+	 * A live DSU maps at least the system image and its userdata image.
+	 * A single mapping is not enough to tell it apart from an install.
+	 */
+	if (dsu_seen_count >= 2)
+		dsu_mark_active();
+out:
+	mutex_unlock(&dsu_lock);
 }
 EXPORT_SYMBOL_GPL(dsu_detect_note_dm_name);
 
@@ -195,9 +127,6 @@ static const struct file_operations dsu_detect_proc_fops = {
 static int __init dsu_detect_init(void)
 {
 	proc_create("dsu_detect", 0444, NULL, &dsu_detect_proc_fops);
-
-	dsu_start = jiffies;
-	schedule_delayed_work(&dsu_work, 0);
 
 	pr_info("DSU detector ready (forced=%d)\n", dsu_forced);
 
