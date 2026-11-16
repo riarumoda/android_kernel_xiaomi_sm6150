@@ -646,6 +646,17 @@ config DSU_DETECT
 
 	  If unsure, say N.
 
+config PANEL_OVERRIDE
+	bool "Panel physical size override"
+	help
+	  Expose panel width and height values in millimeters through
+	  /proc/panel_override and the panel_override module parameters.
+	  Display drivers use them when filling connector information.
+
+	  A value of 0 keeps the size from the device tree.
+
+	  If unsure, say N.
+
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"

@@ -16,6 +16,7 @@
 
 #define pr_fmt(fmt)	"dsi-drm:[%s] " fmt, __func__
 #include <linux/msm_drm_notify.h>
+#include <linux/panel_override.h>
 
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_atomic.h>
@@ -969,6 +970,9 @@ enum drm_connector_status dsi_conn_detect(struct drm_connector *conn,
 	conn->display_info.width_mm = info.width_mm;
 	conn->display_info.height_mm = info.height_mm;
 
+	panel_override_apply(&conn->display_info.width_mm,
+			     &conn->display_info.height_mm);
+
 	return status;
 }
 
@@ -1098,6 +1102,10 @@ int dsi_connector_get_modes(struct drm_connector *connector, void *data)
 	edid_size = min_t(u32, sizeof(edid), EDID_LENGTH);
 
 	memcpy(&edid, edid_buf, edid_size);
+
+	/* Apply the override before the display density is chosen. */
+	panel_override_apply(&connector->display_info.width_mm,
+			     &connector->display_info.height_mm);
 
 	if (sde_connector_get_panel(connector)) {
 		/*
