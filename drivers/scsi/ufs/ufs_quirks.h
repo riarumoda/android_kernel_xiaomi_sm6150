@@ -150,4 +150,6 @@ struct ufs_dev_fix {
  */
 #define UFS_DEVICE_QUIRK_WAIT_AFTER_REF_CLK_UNGATE	(1 << 10)
 
+#define UFS_DEVICE_QUIRK_WRITE_BOOSETER_FLUSH	(1U << 31)
+
 #endif /* UFS_QUIRKS_H_ */

@@ -634,6 +634,8 @@ struct request_queue {
 
 	struct work_struct	release_work;
 
+	bool			turbo_write_dev;
+
 #define BLK_MAX_WRITE_HINTS	5
 	u64			write_hints[BLK_MAX_WRITE_HINTS];
 };

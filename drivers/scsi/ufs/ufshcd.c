@@ -445,6 +445,35 @@ static struct ufs_dev_fix ufs_fixups[] = {
 	UFS_FIX(UFS_VENDOR_SKHYNIX, "hC8HL1",
 		UFS_DEVICE_QUIRK_HS_G1_TO_HS_G3_SWITCH),
 
+#if defined(CONFIG_SCSI_SKHPB)
+	UFS_FIX(UFS_VENDOR_SKHYNIX, "H28S",
+		SKHPB_QUIRK_PURGE_HINT_INFO_WHEN_SLEEP),
+	UFS_FIX(UFS_VENDOR_SKHYNIX, "H9HQ15ACPMA",
+		SKHPB_QUIRK_PURGE_HINT_INFO_WHEN_SLEEP),
+	UFS_FIX(UFS_VENDOR_SKHYNIX, "H9HQ15AECMA",
+		SKHPB_QUIRK_PURGE_HINT_INFO_WHEN_SLEEP),
+	UFS_FIX(UFS_VENDOR_SKHYNIX, "H9HQ15AECMM",
+		SKHPB_QUIRK_PURGE_HINT_INFO_WHEN_SLEEP),
+	UFS_FIX(UFS_VENDOR_SKHYNIX, "H9HQ15AFAMA",
+		SKHPB_QUIRK_PURGE_HINT_INFO_WHEN_SLEEP),
+	UFS_FIX(UFS_VENDOR_SKHYNIX, "H9HQ15AFAMM",
+		SKHPB_QUIRK_PURGE_HINT_INFO_WHEN_SLEEP),
+	UFS_FIX(UFS_VENDOR_SKHYNIX, "H9HQ15AJAMM",
+		SKHPB_QUIRK_PURGE_HINT_INFO_WHEN_SLEEP),
+	UFS_FIX(UFS_VENDOR_SKHYNIX, "H9HQ21AECMM",
+		SKHPB_QUIRK_PURGE_HINT_INFO_WHEN_SLEEP),
+	UFS_FIX(UFS_VENDOR_SKHYNIX, "H9HQ21AECMZ",
+		SKHPB_QUIRK_PURGE_HINT_INFO_WHEN_SLEEP),
+	UFS_FIX(UFS_VENDOR_SKHYNIX, "H9HQ21AFAMM",
+		SKHPB_QUIRK_PURGE_HINT_INFO_WHEN_SLEEP),
+	UFS_FIX(UFS_VENDOR_SKHYNIX, "H9HQ21AFAMZ",
+		SKHPB_QUIRK_PURGE_HINT_INFO_WHEN_SLEEP),
+	UFS_FIX(UFS_VENDOR_SKHYNIX, "H9HQ21AJAMM",
+		SKHPB_QUIRK_PURGE_HINT_INFO_WHEN_SLEEP),
+	UFS_FIX(UFS_VENDOR_SKHYNIX, "H9HQ21AHDMM",
+		SKHPB_QUIRK_PURGE_HINT_INFO_WHEN_SLEEP),
+#endif
+
 	END_FIX
 };
 
@@ -3298,7 +3327,7 @@ ufshcd_send_uic_cmd(struct ufs_hba *hba, struct uic_command *uic_cmd)
  *
  * Returns 0 in case of success, non-zero value in case of failure
  */
-static int ufshcd_map_sg(struct ufs_hba *hba, struct ufshcd_lrb *lrbp)
+int ufshcd_map_sg(struct ufs_hba *hba, struct ufshcd_lrb *lrbp)
 {
 	struct ufshcd_sg_entry *prd;
 	struct scatterlist *sg;
@@ -3569,7 +3598,7 @@ static int ufshcd_comp_devman_upiu(struct ufs_hba *hba, struct ufshcd_lrb *lrbp)
  * @hba - per adapter instance
  * @lrb - pointer to local reference block
  */
-static int ufshcd_comp_scsi_upiu(struct ufs_hba *hba, struct ufshcd_lrb *lrbp)
+int ufshcd_comp_scsi_upiu(struct ufs_hba *hba, struct ufshcd_lrb *lrbp)
 {
 	u32 upiu_flags;
 	int ret = 0;
@@ -3581,9 +3610,22 @@ static int ufshcd_comp_scsi_upiu(struct ufs_hba *hba, struct ufshcd_lrb *lrbp)
 		lrbp->command_type = UTP_CMD_TYPE_UFS_STORAGE;
 
 	if (likely(lrbp->cmd)) {
+#if defined(CONFIG_UFSFEATURE)
+		ufsf_hpb_change_lun(&hba->ufsf, lrbp);
+		ufsf_hpb_prep_fn(&hba->ufsf, lrbp);
+		ufsf_tw_prep_fn(&hba->ufsf, lrbp);
+#endif
 		ret = ufshcd_prepare_req_desc_hdr(hba, lrbp,
 				&upiu_flags, lrbp->cmd->sc_data_direction);
 		ufshcd_prepare_utp_scsi_cmd_upiu(lrbp, upiu_flags);
+
+#if defined(CONFIG_SCSI_SKHPB)
+		if (hba->dev_info.w_manufacturer_id == UFS_VENDOR_SKHYNIX) {
+			if (hba->skhpb_state == SKHPB_PRESENT &&
+					hba->issue_ioctl == false)
+				skhpb_prep_fn(hba, lrbp);
+		}
+#endif
 	} else {
 		ret = -EINVAL;
 	}
@@ -3687,6 +3729,13 @@ static int ufshcd_queuecommand(struct Scsi_Host *host, struct scsi_cmnd *cmd)
 	int tag;
 	int err = 0;
 	bool has_read_lock = false;
+#if defined(CONFIG_UFSFEATURE) && defined(CONFIG_UFSHPB)
+	struct scsi_cmnd *pre_cmd;
+	struct ufshcd_lrb *add_lrbp;
+	int add_tag = -ENODEV;
+	int pre_req_err = -EBUSY;
+	int lun;
+#endif
 
 	hba = shost_priv(host);
 
@@ -3700,6 +3749,9 @@ static int ufshcd_queuecommand(struct Scsi_Host *host, struct scsi_cmnd *cmd)
 			__func__, tag, cmd, cmd->request);
 		BUG();
 	}
+#if defined(CONFIG_UFSFEATURE) && defined(CONFIG_UFSHPB)
+	lun = ufshcd_scsi_to_upiu_lun(cmd->device->lun);
+#endif
 
 	err = ufshcd_get_read_lock(hba, cmd->device->lun);
 	if (unlikely(err < 0)) {
@@ -3775,6 +3827,30 @@ static int ufshcd_queuecommand(struct Scsi_Host *host, struct scsi_cmnd *cmd)
 	}
 	if (ufshcd_is_clkgating_allowed(hba))
 		WARN_ON(hba->clk_gating.state != CLKS_ON);
+
+#if defined(CONFIG_UFSFEATURE) && defined(CONFIG_UFSHPB)
+	if (hba->ufsf.ufshpb_state == HPB_PRESENT) {
+		add_tag = ufsf_hpb_prepare_pre_req(&hba->ufsf, cmd, lun);
+		if (add_tag == -EAGAIN) {
+			clear_bit_unlock(tag, &hba->lrb_in_use);
+			err = SCSI_MLQUEUE_HOST_BUSY;
+			hba->ufs_stats.clk_rel.ctx = QUEUE_CMD;
+			ufshcd_release(hba, true);
+			goto out;
+		}
+
+		if (add_tag < 0) {
+			hba->lrb[tag].hpb_ctx_id = MAX_HPB_CONTEXT_ID;
+		} else {
+			add_lrbp = &hba->lrb[add_tag];
+			pre_req_err = ufsf_hpb_prepare_add_lrbp(&hba->ufsf,
+								add_tag);
+			if (pre_req_err)
+				hba->lrb[tag].hpb_ctx_id =
+							MAX_HPB_CONTEXT_ID;
+		}
+	}
+#endif
 
 	err = ufshcd_hibern8_hold(hba, true);
 	if (err) {
@@ -3854,6 +3930,15 @@ static int ufshcd_queuecommand(struct Scsi_Host *host, struct scsi_cmnd *cmd)
 
 	/* issue command to the controller */
 	spin_lock_irqsave(hba->host->host_lock, flags);
+#if defined(CONFIG_UFSFEATURE) && defined(CONFIG_UFSHPB)
+	if (!pre_req_err) {
+		ufshcd_vops_setup_xfer_req(hba, add_tag,
+			(add_lrbp->cmd ? true : false));
+		ufshcd_send_command(hba, add_tag);
+		pre_req_err = -EBUSY;
+		atomic64_inc(&hba->ufsf.ufshpb_lup[add_lrbp->lun]->pre_req_cnt);
+	}
+#endif
 	ufshcd_vops_setup_xfer_req(hba, tag, (lrbp->cmd ? true : false));
 
 	err = ufshcd_send_command(hba, tag);
@@ -3873,6 +3958,16 @@ static int ufshcd_queuecommand(struct Scsi_Host *host, struct scsi_cmnd *cmd)
 out_unlock:
 	spin_unlock_irqrestore(hba->host->host_lock, flags);
 out:
+#if defined(CONFIG_UFSFEATURE) && defined(CONFIG_UFSHPB)
+	if (!pre_req_err) {
+		pre_cmd = add_lrbp->cmd;
+		scsi_dma_unmap(pre_cmd);
+		add_lrbp->cmd = NULL;
+		clear_bit_unlock(add_tag, &hba->lrb_in_use);
+		ufshcd_release(hba, false);
+		ufsf_hpb_end_pre_req(&hba->ufsf, pre_cmd->request);
+	}
+#endif
 	if (has_read_lock)
 		ufshcd_put_read_lock(hba);
 	return err;
@@ -4061,7 +4156,7 @@ static inline void ufshcd_put_dev_cmd_tag(struct ufs_hba *hba, int tag)
  * NOTE: Since there is only one available tag for device management commands,
  * it is expected you hold the hba->dev_cmd.lock mutex.
  */
-static int ufshcd_exec_dev_cmd(struct ufs_hba *hba,
+int ufshcd_exec_dev_cmd(struct ufs_hba *hba,
 		enum dev_cmd_type cmd_type, int timeout)
 {
 	struct ufshcd_lrb *lrbp;
@@ -4151,7 +4246,7 @@ static inline void ufshcd_init_query(struct ufs_hba *hba,
 	ufshcd_update_query_stats(hba, opcode, idn);
 }
 
-static int ufshcd_query_flag_retry(struct ufs_hba *hba,
+int ufshcd_query_flag_retry(struct ufs_hba *hba,
 	enum query_opcode opcode, enum flag_idn idn, bool *flag_res)
 {
 	int ret;
@@ -6123,6 +6218,20 @@ static int ufshcd_slave_configure(struct scsi_device *sdev)
 {
 	struct ufs_hba *hba = shost_priv(sdev->host);
 	struct request_queue *q = sdev->request_queue;
+#if defined(CONFIG_UFSFEATURE)
+	struct ufsf_feature *ufsf = &hba->ufsf;
+
+	if (ufsf_is_valid_lun(sdev->lun)) {
+		ufsf->sdev_ufs_lu[sdev->lun] = sdev;
+		ufsf->slave_conf_cnt++;
+	}
+#endif
+#if defined(CONFIG_SCSI_SKHPB)
+	if (hba->dev_info.w_manufacturer_id == UFS_VENDOR_SKHYNIX) {
+		if (sdev->lun < UFS_UPIU_MAX_GENERAL_LUN)
+			hba->sdev_ufs_lu[sdev->lun] = sdev;
+	}
+#endif
 
 	blk_queue_update_dma_pad(q, PRDT_DATA_BYTE_COUNT_PAD - 1);
 	blk_queue_max_segment_size(q, PRDT_DATA_BYTE_COUNT_MAX);
@@ -6271,6 +6380,18 @@ ufshcd_transfer_rsp_status(struct ufs_hba *hba, struct ufshcd_lrb *lrbp)
 			 */
 			scsi_status = result & MASK_SCSI_STATUS;
 			result = ufshcd_scsi_cmd_status(lrbp, scsi_status);
+#if defined(CONFIG_UFSFEATURE)
+			if (scsi_status == SAM_STAT_GOOD)
+				ufsf_hpb_noti_rb(&hba->ufsf, lrbp);
+#endif
+#if defined(CONFIG_SCSI_SKHPB)
+			if (hba->dev_info.w_manufacturer_id ==
+					UFS_VENDOR_SKHYNIX) {
+				if (hba->skhpb_state == SKHPB_PRESENT &&
+						scsi_status == SAM_STAT_GOOD)
+					skhpb_rsp_upiu(hba, lrbp);
+			}
+#endif
 
 			/*
 			 * Currently we are only supporting BKOPs exception
@@ -6877,6 +6998,9 @@ static void ufshcd_exception_event_handler(struct work_struct *work)
 	if (status & MASK_EE_URGENT_BKOPS)
 		ufshcd_bkops_exception_event_handler(hba);
 
+#if defined(CONFIG_UFSFEATURE)
+	ufsf_tw_ee_handler(&hba->ufsf);
+#endif
 out:
 	ufshcd_scsi_unblock_requests(hba);
 	/*
@@ -7688,6 +7812,18 @@ static int ufshcd_eh_device_reset_handler(struct scsi_cmnd *cmd)
 out:
 	hba->req_abort_count = 0;
 	if (!err) {
+#if defined(CONFIG_UFSFEATURE)
+		ufsf_hpb_reset_lu(&hba->ufsf);
+		ufsf_tw_reset_lu(&hba->ufsf);
+#endif
+#if defined(CONFIG_SCSI_SKHPB)
+		if (hba->dev_info.w_manufacturer_id == UFS_VENDOR_SKHYNIX) {
+			if (hba->skhpb_state == SKHPB_PRESENT)
+				hba->skhpb_state = SKHPB_RESET;
+			schedule_delayed_work(&hba->skhpb_init_work,
+					      msecs_to_jiffies(10));
+		}
+#endif
 		err = SUCCESS;
 	} else {
 		dev_err(hba->dev, "%s: failed with err %d\n", __func__, err);
@@ -7919,6 +8055,10 @@ static int ufshcd_host_reset_and_restore(struct ufs_hba *hba)
 	 */
 	spin_lock_irqsave(hba->host->host_lock, flags);
 	ufshcd_hba_stop(hba, false);
+#if defined(CONFIG_UFSFEATURE)
+	ufsf_hpb_reset_host(&hba->ufsf);
+	ufsf_tw_reset_host(&hba->ufsf);
+#endif
 	hba->silence_err_logs = true;
 	ufshcd_complete_requests(hba);
 	hba->silence_err_logs = false;
@@ -8905,7 +9045,17 @@ reinit:
 			hba->clk_scaling.is_allowed = true;
 		}
 
+#if defined(CONFIG_UFSFEATURE)
+		ufsf_device_check(hba);
+		ufsf_hpb_init(&hba->ufsf);
+		ufsf_tw_init(&hba->ufsf);
+#endif
 		scsi_scan_host(hba->host);
+
+#if defined(CONFIG_SCSI_SKHPB)
+		if (hba->dev_info.w_manufacturer_id == UFS_VENDOR_SKHYNIX)
+			schedule_delayed_work(&hba->skhpb_init_work, 0);
+#endif
 		pm_runtime_put_sync(hba->dev);
 	}
 
@@ -8936,6 +9086,11 @@ out:
 	 */
 	if (ret && !ufshcd_eh_in_progress(hba) && !hba->pm_op_in_progress)
 		pm_runtime_put_sync(hba->dev);
+
+#if defined(CONFIG_UFSFEATURE)
+	ufsf_hpb_reset(&hba->ufsf);
+	ufsf_tw_reset(&hba->ufsf);
+#endif
 
 	trace_ufshcd_init(dev_name(hba->dev), ret,
 		ktime_to_us(ktime_sub(ktime_get(), start)),
@@ -9153,6 +9308,22 @@ static int ufshcd_query_ioctl(struct ufs_hba *hba, u8 lun, void __user *buffer)
 			__func__, err);
 		goto out_release_mem;
 	}
+
+#if defined(CONFIG_UFSFEATURE)
+	if (ufsf_check_query(ioctl_data->opcode)) {
+		u8 selector = 0;
+
+		if (hba->dev_info.w_manufacturer_id == UFS_VENDOR_SAMSUNG ||
+		    hba->dev_info.w_manufacturer_id == UFS_VENDOR_MICRON)
+			selector = UFSFEATURE_SELECTOR;
+
+		err = ufsf_query_ioctl(&hba->ufsf, lun, buffer,
+				(struct ufs_ioctl_query_data_hpb *)ioctl_data,
+				selector);
+		kfree(ioctl_data);
+		return err;
+	}
+#endif
 
 	/* verify legal parameters & send query */
 	switch (ioctl_data->opcode) {
@@ -10161,6 +10332,15 @@ static int ufshcd_suspend(struct ufs_hba *hba, enum ufs_pm_op pm_op)
 		req_link_state = UIC_LINK_OFF_STATE;
 	}
 
+#if defined(CONFIG_UFSFEATURE)
+	ufsf_hpb_suspend(&hba->ufsf);
+	ufsf_tw_suspend(&hba->ufsf);
+#endif
+#if defined(CONFIG_SCSI_SKHPB)
+	if (hba->dev_info.w_manufacturer_id == UFS_VENDOR_SKHYNIX)
+		skhpb_suspend(hba);
+#endif
+
 	ret = ufshcd_crypto_suspend(hba, pm_op);
 	if (ret)
 		goto out;
@@ -10209,6 +10389,14 @@ static int ufshcd_suspend(struct ufs_hba *hba, enum ufs_pm_op pm_op)
 			ufshcd_disable_auto_bkops(hba);
 		}
 	}
+
+#if defined(CONFIG_UFSFEATURE) && defined(CONFIG_UFSTW)
+	if (ufstw_need_flush(&hba->ufsf)) {
+		ret = -EAGAIN;
+		pm_runtime_mark_last_busy(hba->dev);
+		goto enable_gating;
+	}
+#endif
 
 	if ((req_dev_pwr_mode != hba->curr_dev_pwr_mode) &&
 	     ((ufshcd_is_runtime_pm(pm_op) && !hba->auto_bkops_enabled) ||
@@ -10295,6 +10483,10 @@ enable_gating:
 		ufshcd_resume_clkscaling(hba);
 	hba->hibern8_on_idle.is_suspended = false;
 	hba->clk_gating.is_suspended = false;
+#if defined(CONFIG_UFSFEATURE)
+	ufsf_hpb_resume(&hba->ufsf);
+	ufsf_tw_resume(&hba->ufsf);
+#endif
 	ufshcd_release_all(hba);
 	ufshcd_crypto_resume(hba, pm_op);
 out:
@@ -10421,6 +10613,14 @@ static int ufshcd_resume(struct ufs_hba *hba, enum ufs_pm_op pm_op)
 
 	if (hba->clk_scaling.is_allowed)
 		ufshcd_resume_clkscaling(hba);
+
+#if defined(CONFIG_UFSFEATURE)
+	ufsf_hpb_resume(&hba->ufsf);
+	ufsf_tw_resume(&hba->ufsf);
+#endif
+#if defined(CONFIG_SCSI_SKHPB)
+	skhpb_resume(hba);
+#endif
 
 skip_dev_ops:
 	/* Schedule clock gating in case of no access to UFS device yet */
@@ -11032,6 +11232,15 @@ ufshcd_exit_latency_hist(struct ufs_hba *hba)
  */
 void ufshcd_remove(struct ufs_hba *hba)
 {
+#if defined(CONFIG_UFSFEATURE)
+	ufsf_hpb_release(&hba->ufsf);
+	ufsf_tw_release(&hba->ufsf);
+#endif
+#if defined(CONFIG_SCSI_SKHPB)
+	if (hba->dev_info.w_manufacturer_id == UFS_VENDOR_SKHYNIX)
+		skhpb_release(hba, SKHPB_NEED_INIT);
+#endif
+
 	ufshcd_remove_sysfs_nodes(hba);
 	scsi_remove_host(hba->host);
 	/* disable interrupts */
@@ -11214,6 +11423,7 @@ int ufshcd_init(struct ufs_hba *hba, void __iomem *mmio_base, unsigned int irq)
 
 	/* Initialize UIC command mutex */
 	mutex_init(&hba->uic_cmd_mutex);
+	sema_init(&hba->eh_sem, 1);
 
 	/* Initialize mutex for device management commands */
 	mutex_init(&hba->dev_cmd.lock);
@@ -11325,6 +11535,15 @@ int ufshcd_init(struct ufs_hba *hba, void __iomem *mmio_base, unsigned int irq)
 	 * ufshcd_probe_hba().
 	 */
 	ufshcd_set_ufs_dev_active(hba);
+
+#if defined(CONFIG_UFSFEATURE)
+	ufsf_hpb_set_init_state(&hba->ufsf);
+	ufsf_tw_set_init_state(&hba->ufsf);
+#endif
+
+#if defined(CONFIG_SCSI_SKHPB)
+	ufshcd_init_hpb(hba);
+#endif
 
 	ufshcd_cmd_log_init(hba);
 
