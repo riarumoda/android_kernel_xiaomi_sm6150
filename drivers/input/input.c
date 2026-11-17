@@ -441,6 +441,12 @@ void input_event(struct input_dev *dev,
 {
 	unsigned long flags;
 
+	/* Trace wake keys entering the input core. */
+	if (type == EV_KEY &&
+	    (code == KEY_POWER || code == KEY_WAKEUP || code == KEY_SLEEP))
+		pr_info_ratelimited("WAKEIN: %s reports key code=%u value=%d\n",
+				    dev->name ? dev->name : "?", code, value);
+
 	if (is_event_supported(type, dev->evbit, EV_MAX)) {
 
 		spin_lock_irqsave(&dev->event_lock, flags);

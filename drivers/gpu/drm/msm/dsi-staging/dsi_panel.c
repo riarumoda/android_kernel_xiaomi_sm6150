@@ -4995,6 +4995,21 @@ error:
 	return rc;
 }
 
+/*
+ * Warn when an LP command set is missing: dsi_panel_tx_cmd_set() silently
+ * succeeds on an empty set, so the panel keeps displaying its last frame.
+ */
+static void dsi_panel_log_lp_cmd_set(struct dsi_panel *panel,
+				     enum dsi_cmd_set_type type, const char *name)
+{
+	if (!panel || !panel->cur_mode || !panel->cur_mode->priv_info)
+		return;
+
+	if (panel->cur_mode->priv_info->cmd_sets[type].count == 0)
+		pr_info("[%s] %s: no %s command set, panel keeps last frame\n",
+			panel->name, __func__, name);
+}
+
 int dsi_panel_set_lp1(struct dsi_panel *panel)
 {
 	int rc = 0;
@@ -5004,6 +5019,7 @@ int dsi_panel_set_lp1(struct dsi_panel *panel)
 		return -EINVAL;
 	}
 	pr_info("%s\n", __func__);
+	dsi_panel_log_lp_cmd_set(panel, DSI_CMD_SET_LP1, "LP1");
 	mutex_lock(&panel->panel_lock);
 	if (!panel->panel_initialized)
 		goto exit;
@@ -5039,6 +5055,7 @@ int dsi_panel_set_lp2(struct dsi_panel *panel)
 		return -EINVAL;
 	}
 	pr_info("%s\n", __func__);
+	dsi_panel_log_lp_cmd_set(panel, DSI_CMD_SET_LP2, "LP2");
 	mutex_lock(&panel->panel_lock);
 
 	rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_LP2);
@@ -5061,6 +5078,7 @@ int dsi_panel_set_nolp(struct dsi_panel *panel)
 		return -EINVAL;
 	}
 	pr_info("%s\n", __func__);
+	dsi_panel_log_lp_cmd_set(panel, DSI_CMD_SET_NOLP, "NOLP");
 	mutex_lock(&panel->panel_lock);
 
         /**

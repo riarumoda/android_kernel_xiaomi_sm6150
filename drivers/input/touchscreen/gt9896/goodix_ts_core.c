@@ -1242,6 +1242,12 @@ static irqreturn_t goodix_ts_threadirq_func(int irq, void *data)
 	int r;
 
 	core_data->irq_trig_cnt++;
+
+	/* Trace touch interrupts received while suspended. */
+	if (atomic_read(&core_data->suspend_stat) != TP_NO_SUSPEND)
+		pr_info_ratelimited("WAKEIN: goodix irq in suspend state %d\n",
+				    atomic_read(&core_data->suspend_stat));
+
 	us = 20*1000;
 	//pm_qos_update_request_timeout(&core_data->tp_qos_request, 500, us);
 

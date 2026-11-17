@@ -1084,6 +1084,9 @@ static irqreturn_t qpnp_kpdpwr_irq(int irq, void *_pon)
 	if (rc)
 		dev_err(pon->dev, "Unable to send input event, rc=%d\n", rc);
 
+	/* Trace power-key interrupts. */
+	pr_info_ratelimited("WAKEIN: pwrkey irq rc=%d\n", rc);
+
 	return IRQ_HANDLED;
 }
 
