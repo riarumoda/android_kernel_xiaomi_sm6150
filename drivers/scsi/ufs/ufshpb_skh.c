@@ -2361,7 +2361,8 @@ static int skhpb_init(struct ufs_hba *hba)
 
 	for (retries = 0; retries < 20; retries++) {
 		if (!hba->lrb_in_use) {
-			ret = ufshcd_query_flag(hba, UPIU_QUERY_OPCODE_SET_FLAG,
+			ret = ufshcd_query_flag_retry(hba,
+				UPIU_QUERY_OPCODE_SET_FLAG,
 				QUERY_FLAG_IDN_HPB_RESET, NULL);
 			if (!ret) {
 				SKHPB_DRIVER_I("Query fHPBReset is successfully sent retries = %d\n", retries);
@@ -3057,9 +3058,9 @@ static ssize_t skhpb_sysfs_hpb_reset_store(struct skhpb_lu *hpb,
 
 	for (retries = 1; retries <= 20; retries++) {
 		pm_runtime_get_sync(SKHPB_DEV(hpb));
-		ufshcd_hold(hpb->hba, false);
+		ufshcd_hold_all(hpb->hba);
 		doorbel = ufshcd_readl(hpb->hba, REG_UTP_TRANSFER_REQ_DOOR_BELL);
-		ufshcd_release(hpb->hba, false);
+		ufshcd_release_all(hpb->hba);
 		pm_runtime_mark_last_busy(SKHPB_DEV(hpb));
 		pm_runtime_put_noidle(SKHPB_DEV(hpb));
 
