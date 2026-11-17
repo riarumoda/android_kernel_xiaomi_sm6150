@@ -4204,8 +4204,62 @@ error:
 }
 
 
+static struct dsi_panel *anti_flicker_panel;
+
+static ssize_t anti_flicker_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t len)
+{
+	struct dsi_panel *panel = anti_flicker_panel;
+	bool enable;
+	int rc;
+
+	if (!panel)
+		return -ENODEV;
+	if (kstrtobool(buf, &enable))
+		return -EINVAL;
+
+	rc = panel_disp_param_send_lock(panel,
+			enable ? DISPPARAM_DC_ON : DISPPARAM_DC_OFF);
+	if (rc)
+		return rc;
+
+	mutex_lock(&panel->panel_lock);
+	if (panel->panel_initialized && panel->last_bl_lvl)
+		rc = dsi_panel_set_backlight(panel, panel->last_bl_lvl);
+	mutex_unlock(&panel->panel_lock);
+
+	return rc ? rc : len;
+}
+
+static ssize_t anti_flicker_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct dsi_panel *panel = anti_flicker_panel;
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n",
+			 panel && panel->dc_enable ? 1 : 0);
+}
+
+static DEVICE_ATTR(anti_flicker, S_IRUGO | S_IWUSR,
+	anti_flicker_show, anti_flicker_store);
+
+static struct attribute *anti_flicker_attrs[] = {
+	&dev_attr_anti_flicker.attr,
+	NULL,
+};
+
+static struct attribute_group anti_flicker_attr_group = {
+	.attrs = anti_flicker_attrs,
+};
+
 void dsi_panel_put(struct dsi_panel *panel)
 {
+	if (anti_flicker_panel == panel) {
+		sysfs_remove_group(&panel->parent->kobj,
+				   &anti_flicker_attr_group);
+		anti_flicker_panel = NULL;
+	}
+
 	/* free resources allocated for ESD check */
 	dsi_panel_esd_config_deinit(&panel->esd_config);
 
@@ -4512,6 +4566,15 @@ int dsi_panel_drv_init(struct dsi_panel *panel,
 		if (!mipi_proc_entry)
 			printk(KERN_WARNING "mipi_reg: unable to create proc entry.\n");
 #endif
+
+	if (!anti_flicker_panel) {
+		rc = sysfs_create_group(&panel->parent->kobj,
+					&anti_flicker_attr_group);
+		if (!rc)
+			anti_flicker_panel = panel;
+
+		rc = 0;
+	}
 
 	goto exit;
 
