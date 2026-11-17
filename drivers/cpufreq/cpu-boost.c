@@ -43,6 +43,12 @@ module_param(input_boost_ms, uint, 0644);
 static unsigned int input_boost_min_ms = 300;
 module_param(input_boost_min_ms, uint, 0644);
 
+static unsigned int input_boost_freq_little = 1400000;
+module_param(input_boost_freq_little, uint, 0644);
+
+static unsigned int input_boost_freq_big = 1800000;
+module_param(input_boost_freq_big, uint, 0644);
+
 /* Boost policies without an explicit frequency to their current maximum. */
 static bool input_boost_unlisted_max = true;
 module_param(input_boost_unlisted_max, bool, 0644);
@@ -338,6 +344,41 @@ static struct input_handler cpuboost_input_handler = {
 	.id_table       = cpuboost_ids,
 };
 
+/* Seed the boost targets so the boost works without an init script. */
+static void cpu_boost_set_input_freq_defaults(void)
+{
+	struct cpufreq_policy *policy;
+	unsigned int max_freq = 0;
+	int cpu;
+
+	if (input_boost_enabled)
+		return;
+
+	for_each_possible_cpu(cpu) {
+		policy = cpufreq_cpu_get_raw(cpu);
+		if (policy && policy->cpuinfo.max_freq > max_freq)
+			max_freq = policy->cpuinfo.max_freq;
+	}
+
+	if (!max_freq)
+		return;
+
+	for_each_possible_cpu(cpu) {
+		struct cpu_sync *s = &per_cpu(sync_info, cpu);
+
+		policy = cpufreq_cpu_get_raw(cpu);
+		if (!policy || !policy->cpuinfo.max_freq)
+			continue;
+
+		s->input_boost_freq = min(
+			policy->cpuinfo.max_freq == max_freq ?
+				input_boost_freq_big : input_boost_freq_little,
+			policy->cpuinfo.max_freq);
+	}
+
+	input_boost_enabled = input_boost_freq_little || input_boost_freq_big;
+}
+
 static int cpu_boost_init(void)
 {
 	int cpu, ret;
@@ -354,6 +395,7 @@ static int cpu_boost_init(void)
 		s = &per_cpu(sync_info, cpu);
 		s->cpu = cpu;
 	}
+	cpu_boost_set_input_freq_defaults();
 	cpufreq_register_notifier(&boost_adjust_nb, CPUFREQ_POLICY_NOTIFIER);
 
 	ret = input_register_handler(&cpuboost_input_handler);
