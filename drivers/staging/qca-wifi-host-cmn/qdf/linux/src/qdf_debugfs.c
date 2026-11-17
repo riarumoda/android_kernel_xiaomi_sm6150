@@ -26,6 +26,7 @@
 #include <qdf_mem.h>
 #include <qdf_trace.h>
 #include <qdf_module.h>
+#include <linux/err.h>
 
 /* A private structure definition to qdf sequence */
 struct qdf_debugfs_seq_priv {
@@ -37,10 +38,13 @@ static qdf_dentry_t qdf_debugfs_root;
 
 QDF_STATUS qdf_debugfs_init(void)
 {
-	qdf_debugfs_root = debugfs_create_dir(KBUILD_MODNAME, NULL);
+	if (!qdf_debugfs_root) {
+		qdf_debugfs_root = debugfs_create_dir(KBUILD_MODNAME, NULL);
 
-	if (!qdf_debugfs_root)
-		return QDF_STATUS_E_FAILURE;
+		/* debugfs is optional, don't fail driver init over it */
+		if (IS_ERR_OR_NULL(qdf_debugfs_root))
+			qdf_debugfs_root = NULL;
+	}
 
 	return QDF_STATUS_SUCCESS;
 }
