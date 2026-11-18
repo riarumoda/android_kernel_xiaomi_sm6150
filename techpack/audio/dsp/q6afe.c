@@ -40,6 +40,10 @@
 #define AFE_PARAM_ID_AWDSP_RX_PARAMS            (0x10013D12)
 #define AFE_PORT_ID_AWDSP_RX			(AFE_PORT_ID_PRIMARY_MI2S_RX)
 #define AFE_PORT_ID_AWDSP_TX			(AFE_PORT_ID_PRIMARY_MI2S_TX)
+#define AFE_TOPOLOGY_ID_MI_SP_TX		(0x1000A501)
+#define AFE_TOPOLOGY_ID_MI_SP_RX		(0x1000A502)
+#define AFE_MODULE_ID_MI_SP_TX			(0x1000A510)
+#define AFE_MODULE_ID_MI_SP_RX			(0x1000A520)
 #endif /* #ifdef CONFIG_SND_SOC_AWINIC_AW882XX */
 
 #define WAKELOCK_TIMEOUT	5000
@@ -2720,12 +2724,24 @@ int aw_send_afe_cal_apr(uint32_t param_id, void *buf, int cmd_size, bool write)
 	struct rtac_cal_block_data *aw_cal = &(this_afe.aw_cal);
 	struct mem_mapping_hdr mem_hdr;
 	struct param_hdr_v3  param_hdr;
+	uint32_t topology;
+
+	topology = afe_get_topology(AFE_PORT_ID_AWDSP_RX);
 
 	pr_debug("%s: enter\n", __func__);
+
+	pr_info("%s: Get MI SP TX Topology 0x%x in port of 0x%x",
+		__func__, topology, AFE_PORT_ID_AWDSP_RX);
 
 	if (param_id == AFE_PARAM_ID_AWDSP_TX_SET_ENABLE) {
 		port_id = AFE_PORT_ID_AWDSP_TX;
 		module_id = AFE_MODULE_ID_AWDSP_TX;
+		if (topology == AFE_TOPOLOGY_ID_MI_SP_TX) {
+			module_id = AFE_MODULE_ID_MI_SP_TX;
+			pr_info("%s: Get MI SP TX module 0x%x from TX Topology 0x%x in port of 0x%x",
+				__func__, module_id, topology,
+				AFE_PORT_ID_AWDSP_TX);
+		}
 	}
 
 	if (aw_cal->map_data.dma_buf == 0) {
@@ -2763,6 +2779,12 @@ int aw_send_afe_cal_apr(uint32_t param_id, void *buf, int cmd_size, bool write)
 		goto err;
 	}
 
+	if (topology == AFE_TOPOLOGY_ID_MI_SP_RX) {
+		module_id = AFE_MODULE_ID_MI_SP_RX;
+		pr_info("%s: Get MI SP RX module 0x%x from RX Topology 0x%x in port of 0x%x",
+			__func__, module_id, topology, port_id);
+	}
+
 	/* Pack message header with data */
 	param_hdr.module_id = module_id;
 	param_hdr.instance_id = INSTANCE_ID_0;
@@ -2788,8 +2810,9 @@ int aw_send_afe_cal_apr(uint32_t param_id, void *buf, int cmd_size, bool write)
 	mem_hdr.mem_map_handle =
 		aw_cal->map_data.map_handle;
 
-	pr_debug("%s: Sending aw_cal port = 0x%x, cal size = %zd, cal addr = 0x%pK\n",
-		__func__, port_id, aw_cal->cal_data.size, &aw_cal->cal_data.paddr);
+	pr_debug("%s: Sending aw_cal port = 0x%x, topo = 0x%x, module = 0x%x,cal size = %zd, cal addr = 0x%pK\n",
+		__func__, port_id, topology, module_id, aw_cal->cal_data.size,
+		&aw_cal->cal_data.paddr);
 
 	result = afe_q6_interface_prepare();
 	if (result != 0) {
