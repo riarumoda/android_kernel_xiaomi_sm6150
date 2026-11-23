@@ -1023,62 +1023,109 @@ struct avc_node *avc_compute_av(struct selinux_state *state,
 #define SELINUX_AP_RETRY_MS		2000
 #define SELINUX_AP_RETRIES		15
 
-static atomic_t selinux_ap_window_count = ATOMIC_INIT(0);
+static DEFINE_SPINLOCK(selinux_ap_lock);
 static unsigned long selinux_ap_window_start;
-static atomic_t selinux_ap_attempts = ATOMIC_INIT(0);
-static atomic_t selinux_ap_done = ATOMIC_INIT(0);
-static unsigned long selinux_ap_queued;
+static unsigned int selinux_ap_window_count;
+static unsigned int selinux_ap_attempts;
+static bool selinux_ap_done;
+static bool selinux_ap_queued;
 
 static void selinux_ap_work_fn(struct work_struct *work);
 static DECLARE_DELAYED_WORK(selinux_ap_dwork, selinux_ap_work_fn);
 
 static void selinux_ap_note_denial(void)
 {
-	unsigned long now = jiffies;
-	unsigned long start = READ_ONCE(selinux_ap_window_start);
+	unsigned long flags;
 
-	if (atomic_read(&selinux_ap_done))
+	if (READ_ONCE(selinux_ap_done))
 		return;
 
-	if (!start ||
-	    time_after(now, start + msecs_to_jiffies(SELINUX_AP_WINDOW_MS))) {
-		WRITE_ONCE(selinux_ap_window_start, now);
-		atomic_set(&selinux_ap_window_count, 0);
+	spin_lock_irqsave(&selinux_ap_lock, flags);
+
+	if (selinux_ap_done)
+		goto out;
+
+	if (!selinux_ap_window_start ||
+	    time_after(jiffies, selinux_ap_window_start +
+		       msecs_to_jiffies(SELINUX_AP_WINDOW_MS))) {
+		selinux_ap_window_start = jiffies;
+		selinux_ap_window_count = 0;
 	}
 
-	if (atomic_inc_return(&selinux_ap_window_count) <
-	    SELINUX_AP_DENY_THRESHOLD)
-		return;
+	if (selinux_ap_window_count < SELINUX_AP_DENY_THRESHOLD)
+		selinux_ap_window_count++;
 
-	if (!test_and_set_bit(0, &selinux_ap_queued))
-		schedule_delayed_work(&selinux_ap_dwork,
-				      msecs_to_jiffies(SELINUX_AP_RETRY_MS));
+	if (selinux_ap_window_count < SELINUX_AP_DENY_THRESHOLD)
+		goto out;
+
+	/* Keep the guard set until the worker finishes. */
+	if (selinux_ap_queued)
+		goto out;
+
+	selinux_ap_queued = true;
+	spin_unlock_irqrestore(&selinux_ap_lock, flags);
+
+	schedule_delayed_work(&selinux_ap_dwork,
+			      msecs_to_jiffies(SELINUX_AP_RETRY_MS));
+	return;
+
+out:
+	spin_unlock_irqrestore(&selinux_ap_lock, flags);
+}
+
+static void selinux_ap_finish(void)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&selinux_ap_lock, flags);
+	selinux_ap_done = true;
+	selinux_ap_queued = false;
+	spin_unlock_irqrestore(&selinux_ap_lock, flags);
+}
+
+static void selinux_ap_give_up(void)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&selinux_ap_lock, flags);
+	selinux_ap_attempts = 0;
+	selinux_ap_queued = false;
+	/* Require a fresh flood before retrying. */
+	selinux_ap_window_start = 0;
+	selinux_ap_window_count = 0;
+	spin_unlock_irqrestore(&selinux_ap_lock, flags);
+
+	pr_info("SELinux: denial flood ignored, not a GSI boot\n");
 }
 
 static void selinux_ap_work_fn(struct work_struct *work)
 {
-	int attempts;
+	unsigned long flags;
+	bool retry;
 
-	/* Allow a later flood to queue the check again. */
-	clear_bit(0, &selinux_ap_queued);
-
-	if (atomic_read(&selinux_ap_done))
+	spin_lock_irqsave(&selinux_ap_lock, flags);
+	if (selinux_ap_done) {
+		selinux_ap_queued = false;
+		spin_unlock_irqrestore(&selinux_ap_lock, flags);
 		return;
+	}
+	spin_unlock_irqrestore(&selinux_ap_lock, flags);
 
 	if (!dsu_detect_active()) {
-		attempts = atomic_inc_return(&selinux_ap_attempts);
-		if (attempts < SELINUX_AP_RETRIES) {
+		spin_lock_irqsave(&selinux_ap_lock, flags);
+		retry = ++selinux_ap_attempts < SELINUX_AP_RETRIES;
+		spin_unlock_irqrestore(&selinux_ap_lock, flags);
+
+		if (retry)
 			schedule_delayed_work(&selinux_ap_dwork,
 					      msecs_to_jiffies(SELINUX_AP_RETRY_MS));
-		} else {
-			atomic_set(&selinux_ap_attempts, 0);
-			pr_info("SELinux: denial flood ignored, not a GSI boot\n");
-		}
+		else
+			selinux_ap_give_up();
 		return;
 	}
 
 	if (!enforcing_enabled(&selinux_state)) {
-		atomic_set(&selinux_ap_done, 1);
+		selinux_ap_finish();
 		return;
 	}
 
@@ -1089,7 +1136,7 @@ static void selinux_ap_work_fn(struct work_struct *work)
 	selinux_status_update_setenforce(&selinux_state, 0);
 	call_lsm_notifier(LSM_POLICY_CHANGE, NULL);
 
-	atomic_set(&selinux_ap_done, 1);
+	selinux_ap_finish();
 }
 #else
 static inline void selinux_ap_note_denial(void)
