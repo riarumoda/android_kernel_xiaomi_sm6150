@@ -4,8 +4,10 @@
  *
  * A DSU boot reuses the host kernel, so there is no bootloader flag to read.
  * First-stage init maps the DSU images with device-mapper names ending in
- * "_gsi".  The device-mapper ioctl path reports every created name here, so
- * the result does not depend on sysfs access from a kernel thread.
+ * "_gsi".  The device-mapper ioctl path reports every created mapping here,
+ * and the boot is only treated as a DSU boot when the root filesystem is
+ * backed by one of them.  Temporary mappings used while installing a DSU
+ * therefore do not mark the running system as a DSU.
  */
 
 #include <linux/init.h>
@@ -13,12 +15,15 @@
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/string.h>
+#include <linux/fs.h>
+#include <linux/namei.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/dsu_detect.h>
 
 #define DSU_NAME_MAX		64
 #define DSU_MAX_MAPPINGS	32
+#define DSU_SUFFIX		"_gsi"
 
 /* -1: auto, 0: off, 1: force on */
 static int dsu_forced = -1;
@@ -27,7 +32,10 @@ static bool dsu_active;
 static bool dsu_logged;
 
 static DEFINE_MUTEX(dsu_lock);
-static char dsu_seen[DSU_MAX_MAPPINGS][DSU_NAME_MAX];
+static struct dsu_mapping {
+	char name[DSU_NAME_MAX];
+	dev_t dev;
+} dsu_seen[DSU_MAX_MAPPINGS];
 static unsigned int dsu_seen_count;
 
 static int __init dsu_detect_setup(char *str)
@@ -56,6 +64,34 @@ static void dsu_mark_active(void)
 	}
 }
 
+static bool dsu_root_on_gsi(void)
+{
+	struct block_device *bdev;
+	struct path path;
+	unsigned int i;
+	bool found = false;
+
+	if (kern_path("/", LOOKUP_FOLLOW | LOOKUP_DIRECTORY, &path))
+		return false;
+
+	bdev = path.dentry->d_sb->s_bdev;
+	if (!bdev)
+		goto out;
+
+	mutex_lock(&dsu_lock);
+	for (i = 0; i < dsu_seen_count; i++) {
+		if (dsu_seen[i].dev == bdev->bd_dev) {
+			found = true;
+			break;
+		}
+	}
+	mutex_unlock(&dsu_lock);
+
+out:
+	path_put(&path);
+	return found;
+}
+
 bool dsu_detect_active(void)
 {
 	if (READ_ONCE(dsu_active))
@@ -66,39 +102,44 @@ bool dsu_detect_active(void)
 		return true;
 	}
 
+	if (dsu_forced == 0)
+		return false;
+
+	if (dsu_root_on_gsi()) {
+		dsu_mark_active();
+		return true;
+	}
+
 	return false;
 }
 EXPORT_SYMBOL_GPL(dsu_detect_active);
 
-void dsu_detect_note_dm_name(const char *name)
+void dsu_detect_note_dm_name(const char *name, dev_t dev)
 {
+	size_t len;
 	unsigned int i;
 
 	if (!name || dsu_forced == 0 || READ_ONCE(dsu_active))
 		return;
 
-	if (!strstr(name, "_gsi"))
+	len = strlen(name);
+	if (len < sizeof(DSU_SUFFIX) - 1 ||
+	    strcmp(name + len - (sizeof(DSU_SUFFIX) - 1), DSU_SUFFIX))
 		return;
 
 	mutex_lock(&dsu_lock);
 
 	for (i = 0; i < dsu_seen_count; i++) {
-		if (!strcmp(dsu_seen[i], name))
+		if (dsu_seen[i].dev == dev)
 			goto out;
 	}
 
 	if (dsu_seen_count >= DSU_MAX_MAPPINGS)
 		goto out;
 
-	strscpy(dsu_seen[dsu_seen_count], name, DSU_NAME_MAX);
+	strscpy(dsu_seen[dsu_seen_count].name, name, DSU_NAME_MAX);
+	dsu_seen[dsu_seen_count].dev = dev;
 	dsu_seen_count++;
-
-	/*
-	 * A live DSU maps at least the system image and its userdata image.
-	 * A single mapping is not enough to tell it apart from an install.
-	 */
-	if (dsu_seen_count >= 2)
-		dsu_mark_active();
 out:
 	mutex_unlock(&dsu_lock);
 }
@@ -106,8 +147,16 @@ EXPORT_SYMBOL_GPL(dsu_detect_note_dm_name);
 
 static int dsu_detect_proc_show(struct seq_file *m, void *v)
 {
+	unsigned int i;
+
 	seq_printf(m, "active: %d\n", dsu_detect_active() ? 1 : 0);
 	seq_printf(m, "forced: %d\n", dsu_forced);
+
+	mutex_lock(&dsu_lock);
+	for (i = 0; i < dsu_seen_count; i++)
+		seq_printf(m, "mapping: %s %u:%u\n", dsu_seen[i].name,
+			   MAJOR(dsu_seen[i].dev), MINOR(dsu_seen[i].dev));
+	mutex_unlock(&dsu_lock);
 
 	return 0;
 }

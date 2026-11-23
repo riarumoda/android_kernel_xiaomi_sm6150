@@ -768,7 +768,7 @@ static int dev_create(struct file *filp, struct dm_ioctl *param, size_t param_si
 		return r;
 	}
 
-	dsu_detect_note_dm_name(param->name);
+	dsu_detect_note_dm_name(param->name, disk_devt(dm_disk(md)));
 
 	param->flags &= ~DM_INACTIVE_PRESENT_FLAG;
 
