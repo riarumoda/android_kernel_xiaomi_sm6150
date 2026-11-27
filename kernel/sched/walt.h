@@ -292,7 +292,26 @@ static inline int same_cluster(int src_cpu, int dst_cpu)
 
 void sort_clusters(void);
 
+/* WALT cpufreq interface */
+#define WALT_CPUFREQ_ROLLOVER		0x1
+#define WALT_CPUFREQ_CONTINUE		0x2
+#define WALT_CPUFREQ_IC_MIGRATION	0x4
+#define WALT_CPUFREQ_PL			0x8
+#define WALT_CPUFREQ_EARLY_DET		0x10
+#define WALT_CPUFREQ_BOOST_UPDATE	0x20
+
 void walt_irq_work(struct irq_work *irq_work);
+
+u64 walt_sched_clock(void);
+bool walt_rtgb_active(void);
+
+static inline void walt_irq_work_queue(struct irq_work *work)
+{
+	if (likely(cpu_online(raw_smp_processor_id())))
+		irq_work_queue(work);
+	else
+		irq_work_queue_on(work, cpumask_any(cpu_online_mask));
+}
 
 void walt_sched_init_rq(struct rq *rq);
 

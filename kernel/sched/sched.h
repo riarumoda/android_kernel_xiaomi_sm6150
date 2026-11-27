@@ -2075,6 +2075,9 @@ struct sched_walt_cpu_load {
 	unsigned long nl;
 	unsigned long pl;
 	u64 ws;
+	bool rtgb_active;
+	bool ed_active;
+	bool big_task_rotation;
 };
 
 static inline unsigned long cpu_util_cum(int cpu, int delta)
@@ -2098,14 +2101,29 @@ static inline unsigned long cpu_util_cum(int cpu, int delta)
 u64 freq_policy_load(struct rq *rq);
 
 extern u64 walt_load_reported_window;
+extern unsigned int walt_rotation_enabled;
+extern unsigned int sysctl_sched_conservative_pl;
+extern unsigned int sysctl_ed_boost_pct;
+extern bool walt_rtgb_active(void);
+
+static inline unsigned long cpu_util_rt(int cpu)
+{
+	struct rt_rq *rt_rq = &(cpu_rq(cpu)->rt);
+
+	return rt_rq->avg.util_avg;
+}
 
 static inline unsigned long
-cpu_util_freq_walt(int cpu, struct sched_walt_cpu_load *walt_load)
+cpu_util_freq_walt_reason(int cpu, struct sched_walt_cpu_load *walt_load,
+			  unsigned int *reason)
 {
 	u64 util, util_unboosted;
 	struct rq *rq = cpu_rq(cpu);
 	unsigned long capacity = capacity_orig_of(cpu);
 	int boost;
+
+	if (reason)
+		*reason = CPUFREQ_REASON_LOAD;
 
 	if (unlikely(walt_disabled || !sysctl_sched_use_walt_cpu_util))
 		return cpu_util(cpu);
@@ -2134,9 +2152,21 @@ cpu_util_freq_walt(int cpu, struct sched_walt_cpu_load *walt_load)
 		walt_load->nl = nl;
 		walt_load->pl = pl;
 		walt_load->ws = walt_load_reported_window;
+		walt_load->rtgb_active = walt_rtgb_active();
+		walt_load->ed_active = (rq->ed_task != NULL);
+		walt_load->big_task_rotation = walt_rotation_enabled;
 	}
 
+	if (reason && rq->ed_task)
+		*reason = CPUFREQ_REASON_EARLY_DET;
+
 	return (util >= capacity) ? capacity : util;
+}
+
+static inline unsigned long
+cpu_util_freq_walt(int cpu, struct sched_walt_cpu_load *walt_load)
+{
+	return cpu_util_freq_walt_reason(cpu, walt_load, NULL);
 }
 
 static inline unsigned long

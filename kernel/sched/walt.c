@@ -61,6 +61,15 @@ u64 sched_ktime_clock(void)
 	return ktime_get_ns();
 }
 
+/*
+ * WALT windows and the reported window start are kept on the ktime clock,
+ * so the governor must use the same clock for its cycle accounting.
+ */
+u64 walt_sched_clock(void)
+{
+	return sched_ktime_clock();
+}
+
 static void sched_resume(void)
 {
 	sched_ktime_suspended = false;
@@ -126,6 +135,10 @@ __read_mostly unsigned int sysctl_sched_cpu_high_irqload = (10 * NSEC_PER_MSEC);
 
 unsigned int sysctl_sched_walt_rotate_big_tasks;
 unsigned int walt_rotation_enabled;
+
+/* WALT governor tuning that is shared between clusters */
+unsigned int sysctl_sched_conservative_pl;
+unsigned int sysctl_ed_boost_pct;
 
 /*
  * sched_window_stats_policy and sched_ravg_hist_size have a 'sysctl' copy
@@ -2665,6 +2678,22 @@ static inline struct related_thread_group*
 lookup_related_thread_group(unsigned int group_id)
 {
 	return related_thread_groups[group_id];
+}
+
+/*
+ * The default colocation group asks the scheduler to avoid the smallest
+ * cluster when it does not fit there. The walt governor uses the same
+ * condition to decide whether its related thread group boost applies.
+ */
+bool walt_rtgb_active(void)
+{
+	struct related_thread_group *grp;
+
+	grp = lookup_related_thread_group(DEFAULT_CGROUP_COLOC_ID);
+	if (!grp || !grp->preferred_cluster)
+		return false;
+
+	return !is_min_capacity_cluster(grp->preferred_cluster);
 }
 
 int alloc_related_thread_groups(void)

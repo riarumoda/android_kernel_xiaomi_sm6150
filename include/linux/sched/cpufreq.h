@@ -20,6 +20,24 @@
 
 #define SCHED_CPUFREQ_RT_DL	(SCHED_CPUFREQ_RT | SCHED_CPUFREQ_DL)
 
+/*
+ * Reasons for a frequency request, reported by the WALT load helpers and
+ * used by the walt governor for tracing and tuning.
+ */
+#define CPUFREQ_REASON_LOAD		0
+#define CPUFREQ_REASON_BTR		0x1
+#define CPUFREQ_REASON_PL		0x2
+#define CPUFREQ_REASON_EARLY_DET	0x4
+#define CPUFREQ_REASON_RTG_BOOST	0x8
+#define CPUFREQ_REASON_HISPEED		0x10
+#define CPUFREQ_REASON_NWD		0x20
+#define CPUFREQ_REASON_FREQ_AGR		0x40
+#define CPUFREQ_REASON_KSOFTIRQD	0x80
+#define CPUFREQ_REASON_TT_LOAD		0x100
+#define CPUFREQ_REASON_SUH		0x200
+#define CPUFREQ_REASON_ADAPTIVE_LOW	0x400
+#define CPUFREQ_REASON_ADAPTIVE_HIGH	0x800
+
 #ifdef CONFIG_CPU_FREQ
 struct update_util_data {
        void (*func)(struct update_util_data *data, u64 time, unsigned int flags);

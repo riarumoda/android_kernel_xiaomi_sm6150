@@ -583,6 +583,92 @@ TRACE_EVENT(sched_load_to_gov,
 		__entry->sysctl_sched_little_cluster_coloc_fmin_khz,
 		__entry->coloc_boost_load)
 );
+
+TRACE_EVENT(waltgov_util_update,
+
+	TP_PROTO(int cpu, unsigned long util, unsigned long avg_cap,
+		 unsigned long max_cap, unsigned long nl, unsigned long pl,
+		 unsigned int rtgb, unsigned int flags),
+
+	TP_ARGS(cpu, util, avg_cap, max_cap, nl, pl, rtgb, flags),
+
+	TP_STRUCT__entry(
+		__field(int,		cpu		)
+		__field(unsigned long,	util		)
+		__field(unsigned long,	avg_cap		)
+		__field(unsigned long,	max_cap		)
+		__field(unsigned long,	nl		)
+		__field(unsigned long,	pl		)
+		__field(unsigned int,	rtgb		)
+		__field(unsigned int,	flags		)
+	),
+
+	TP_fast_assign(
+		__entry->cpu	= cpu;
+		__entry->util	= util;
+		__entry->avg_cap = avg_cap;
+		__entry->max_cap = max_cap;
+		__entry->nl	= nl;
+		__entry->pl	= pl;
+		__entry->rtgb	= rtgb;
+		__entry->flags	= flags;
+	),
+
+	TP_printk("cpu=%d util=%lu avg_cap=%lu max_cap=%lu nl=%lu pl=%lu rtgb=%u flags=0x%x",
+		  __entry->cpu, __entry->util, __entry->avg_cap,
+		  __entry->max_cap, __entry->nl,
+		  __entry->pl, __entry->rtgb, __entry->flags)
+);
+
+TRACE_EVENT(waltgov_next_freq,
+
+	TP_PROTO(unsigned int cpu, unsigned long util, unsigned long max,
+		 unsigned int raw_freq, unsigned int freq,
+		 unsigned int policy_min_freq, unsigned int policy_max_freq,
+		 unsigned int cached_raw_freq, bool need_freq_update,
+		 unsigned int driving_cpu, unsigned int reason),
+
+	TP_ARGS(cpu, util, max, raw_freq, freq, policy_min_freq,
+		policy_max_freq, cached_raw_freq, need_freq_update,
+		driving_cpu, reason),
+
+	TP_STRUCT__entry(
+		__field(unsigned int,	cpu		)
+		__field(unsigned long,	util		)
+		__field(unsigned long,	max		)
+		__field(unsigned int,	raw_freq	)
+		__field(unsigned int,	freq		)
+		__field(unsigned int,	policy_min_freq	)
+		__field(unsigned int,	policy_max_freq	)
+		__field(unsigned int,	cached_raw_freq	)
+		__field(bool,		need_freq_update)
+		__field(unsigned int,	rt_util		)
+		__field(unsigned int,	driving_cpu	)
+		__field(unsigned int,	reason		)
+	),
+
+	TP_fast_assign(
+		__entry->cpu		= cpu;
+		__entry->util		= util;
+		__entry->max		= max;
+		__entry->raw_freq	= raw_freq;
+		__entry->freq		= freq;
+		__entry->policy_min_freq = policy_min_freq;
+		__entry->policy_max_freq = policy_max_freq;
+		__entry->cached_raw_freq = cached_raw_freq;
+		__entry->need_freq_update = need_freq_update;
+		__entry->rt_util	= cpu_util_rt(cpu);
+		__entry->driving_cpu	= driving_cpu;
+		__entry->reason		= reason;
+	),
+
+	TP_printk("cpu=%u util=%lu max=%lu raw_freq=%u freq=%u policy_min_freq=%u policy_max_freq=%u cached_raw_freq=%u need_update=%d rt_util=%u driv_cpu=%u reason=0x%x",
+		  __entry->cpu, __entry->util, __entry->max,
+		  __entry->raw_freq, __entry->freq,
+		  __entry->policy_min_freq, __entry->policy_max_freq,
+		  __entry->cached_raw_freq, __entry->need_freq_update,
+		  __entry->rt_util, __entry->driving_cpu, __entry->reason)
+);
 #else
 #define trace_sched_load_balance_skip_tasks(...)
 #endif
