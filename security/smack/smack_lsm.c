@@ -3007,7 +3007,9 @@ static int smack_shm_shmat(struct kern_ipc_perm *shp, char __user *shmaddr,
  */
 static struct smack_known *smack_of_sem(struct kern_ipc_perm *sma)
 {
-	return (struct smack_known *)sma->security;
+	struct smack_known **blob = smack_ipc(sma);
+
+	return *blob;
 }
 
 /**
@@ -3018,24 +3020,10 @@ static struct smack_known *smack_of_sem(struct kern_ipc_perm *sma)
  */
 static int smack_sem_alloc_security(struct kern_ipc_perm *sma)
 {
-	struct kern_ipc_perm *isp = sma;
-	struct smack_known *skp = smk_of_current();
+	struct smack_known **blob = smack_ipc(sma);
 
-	isp->security = skp;
+	*blob = smk_of_current();
 	return 0;
-}
-
-/**
- * smack_sem_free_security - Clear the security blob for sem
- * @sma: the object
- *
- * Clears the blob pointer
- */
-static void smack_sem_free_security(struct kern_ipc_perm *sma)
-{
-	struct kern_ipc_perm *isp = sma;
-
-	isp->security = NULL;
 }
 
 /**
