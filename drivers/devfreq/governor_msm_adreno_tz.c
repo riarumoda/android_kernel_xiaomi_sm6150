@@ -22,6 +22,7 @@
 #include <linux/mm.h>
 #include <linux/msm_adreno_devfreq.h>
 #include <asm/cacheflush.h>
+#include <drm/drm_refresh_rate.h>
 #include <soc/qcom/scm.h>
 #include "governor.h"
 
@@ -350,6 +351,8 @@ static int tz_get_target_freq(struct devfreq *devfreq, unsigned long *freq)
 	unsigned int scm_data[4];
 	int context_count = 0;
 	bool busy_burst;
+	unsigned int refresh_rate;
+	unsigned int floor = FLOOR;
 
 	/* keeps stats.private_data == NULL   */
 	result = devfreq->profile->get_dev_status(devfreq->dev.parent, &stats);
@@ -371,14 +374,19 @@ static int tz_get_target_freq(struct devfreq *devfreq, unsigned long *freq)
 
 	/* Update the GPU load statistics */
 	compute_work_load(&stats, priv, devfreq);
+
+	refresh_rate = dsi_panel_get_refresh_rate();
+	if (refresh_rate > 60)
+		floor = (FLOOR * 60) / refresh_rate;
+
 	/*
 	 * Do not waste CPU cycles running this algorithm if
-	 * the GPU just started, or if less than FLOOR time
+	 * the GPU just started, or if less than floor time
 	 * has passed since the last run or the gpu hasn't been
 	 * busier than MIN_BUSY.
 	 */
 	if ((stats.total_time == 0) ||
-		(priv->bin.total_time < FLOOR) ||
+		(priv->bin.total_time < floor) ||
 		(unsigned int) priv->bin.busy_time < MIN_BUSY) {
 		return 0;
 	}
