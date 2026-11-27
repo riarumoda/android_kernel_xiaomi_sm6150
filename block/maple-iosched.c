@@ -24,7 +24,7 @@ static inline bool is_display_on(void)
 	return true;
 }
 
-#define MAPLE_IOSCHED_PATCHLEVEL	(6)
+#define MAPLE_IOSCHED_PATCHLEVEL	(7)
 
 enum { ASYNC, SYNC };
 
@@ -95,7 +95,7 @@ maple_add_request(struct request_queue *q, struct request *rq)
    	if (display_on && mdata->fifo_expire[sync][dir]) {
    		rq->fifo_time = jiffies + mdata->fifo_expire[sync][dir];
    		list_add_tail(&rq->queuelist, &mdata->fifo_list[sync][dir]);
-   	} else if (display_on && fifo_expire_suspended) {
+   	} else if (!display_on && fifo_expire_suspended) {
    		rq->fifo_time = jiffies + fifo_expire_suspended;
    		list_add_tail(&rq->queuelist, &mdata->fifo_list[sync][dir]);
    	}
