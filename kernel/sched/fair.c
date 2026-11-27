@@ -11479,12 +11479,17 @@ no_move:
 			 * ->active_balance_work.  Once set, it's cleared
 			 * only after active load balance is finished.
 			 */
-			if (!busiest->active_balance &&
-			    !cpu_isolated(cpu_of(busiest))) {
-				busiest->active_balance = 1;
-				busiest->push_cpu = this_cpu;
-				active_balance = 1;
-			}
+			if (busiest->active_balance ||
+			    cpu_isolated(cpu_of(busiest)))
+				goto no_active_balance;
+
+			if (!busiest->curr->on_rq)
+				goto no_active_balance;
+
+			busiest->active_balance = 1;
+			busiest->push_cpu = this_cpu;
+			active_balance = 1;
+no_active_balance:
 			raw_spin_unlock_irqrestore(&busiest->lock, flags);
 
 			if (active_balance) {
