@@ -96,7 +96,7 @@ maple_add_request(struct request_queue *q, struct request *rq)
    		rq->fifo_time = jiffies + mdata->fifo_expire[sync][dir];
    		list_add_tail(&rq->queuelist, &mdata->fifo_list[sync][dir]);
    	} else if (!display_on && fifo_expire_suspended) {
-   		rq->fifo_time = jiffies + fifo_expire_suspended;
+		rq->fifo_time = jiffies + mdata->fifo_expire[sync][dir];
    		list_add_tail(&rq->queuelist, &mdata->fifo_list[sync][dir]);
    	}
 }
@@ -138,7 +138,7 @@ maple_choose_expired_request(struct maple_data *mdata)
 	 */
 
    if (rq_async_read && rq_sync_read) {
-     if (time_after((unsigned long)rq_sync_read->fifo_time, (unsigned long)rq_async_read->fifo_time))
+      if (time_after((unsigned long)rq_sync_read->fifo_time, (unsigned long)rq_async_read->fifo_time))
              return rq_async_read;
    } else if (rq_async_read) {
            return rq_async_read;
