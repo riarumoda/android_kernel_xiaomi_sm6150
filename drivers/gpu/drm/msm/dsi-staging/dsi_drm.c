@@ -35,6 +35,9 @@
 #define to_dsi_bridge(x)     container_of((x), struct dsi_bridge, base)
 #define to_dsi_state(x)      container_of((x), struct dsi_connector_state, base)
 
+extern void dsi_display_panel_gamma_mode_change(struct dsi_display *display,
+			struct dsi_display_mode *adj_mode);
+
 #define DEFAULT_PANEL_JITTER_NUMERATOR		2
 #define DEFAULT_PANEL_JITTER_DENOMINATOR	1
 #define DEFAULT_PANEL_JITTER_ARRAY_SIZE		2
@@ -454,6 +457,12 @@ static void dsi_bridge_enable(struct drm_bridge *bridge)
 		pr_err("Invalid params\n");
 		return;
 	}
+
+	if (c_bridge->display && c_bridge->display->panel &&
+	    c_bridge->display->panel->cur_mode &&
+	    c_bridge->display->panel->cur_mode->timing.refresh_rate == 120)
+		dsi_display_panel_gamma_mode_change(c_bridge->display,
+				c_bridge->display->panel->cur_mode);
 
 	if (c_bridge->dsi_mode.dsi_mode_flags &
 			(DSI_MODE_FLAG_SEAMLESS | DSI_MODE_FLAG_VRR |
@@ -1226,9 +1235,6 @@ void dsi_conn_enable_event(struct drm_connector *connector,
 			event_idx, &event_info, enable);
 }
 
-extern void dsi_display_panel_gamma_mode_change(struct dsi_display *display,
-			struct dsi_display_mode *adj_mode);
-
 int dsi_conn_post_kickoff(struct drm_connector *connector,
 	struct msm_display_conn_params *params)
 {
@@ -1277,9 +1283,6 @@ int dsi_conn_post_kickoff(struct drm_connector *connector,
 				return -EINVAL;
 			}
 		}
-
-		if (adj_mode.timing.refresh_rate == 120)
-			dsi_display_panel_gamma_mode_change(display, &adj_mode);
 
 		c_bridge->dsi_mode.dsi_mode_flags &= ~DSI_MODE_FLAG_VRR;
 	}
