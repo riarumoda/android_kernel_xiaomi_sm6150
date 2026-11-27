@@ -114,7 +114,7 @@ maple_expired_request(struct maple_data *mdata, int sync, int data_dir)
 	rq = rq_entry_fifo(list->next);
 
 	/* Request has expired */
-	if (time_after_eq(jiffies, (unsigned long)rq->fifo_time))
+        if (time_after(jiffies, (unsigned long)rq->fifo_time))
 		return rq;
 
 	return NULL;
