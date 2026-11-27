@@ -17,11 +17,14 @@
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/slab.h>
-#ifdef CONFIG_POWERSUSPEND
-#include <linux/powersuspend.h>
-#endif
 
-#define MAPLE_IOSCHED_PATCHLEVEL	(5)
+/* Display state tracking is not available on this kernel. */
+static inline bool is_display_on(void)
+{
+	return true;
+}
+
+#define MAPLE_IOSCHED_PATCHLEVEL	(6)
 
 enum { ASYNC, SYNC };
 
@@ -80,27 +83,22 @@ maple_add_request(struct request_queue *q, struct request *rq)
 	struct maple_data *mdata = maple_get_data(q);
 	const int sync = rq_is_sync(rq);
 	const int dir = rq_data_dir(rq);
+	static bool display_on = is_display_on();
 
 	/*
 	 * Add request to the proper fifo list and set its
 	 * expire time.
 	 */
-#ifdef CONFIG_POWERSUSPEND
+
    	/* inrease expiration when device is asleep */
    	unsigned int fifo_expire_suspended = mdata->fifo_expire[sync][dir] * sleep_latency_multiple;
-   	if (!power_suspended && mdata->fifo_expire[sync][dir]) {
+   	if (display_on && mdata->fifo_expire[sync][dir]) {
    		rq->fifo_time = jiffies + mdata->fifo_expire[sync][dir];
    		list_add_tail(&rq->queuelist, &mdata->fifo_list[sync][dir]);
-   	} else if (power_suspended && fifo_expire_suspended) {
+   	} else if (display_on && fifo_expire_suspended) {
    		rq->fifo_time = jiffies + fifo_expire_suspended;
    		list_add_tail(&rq->queuelist, &mdata->fifo_list[sync][dir]);
    	}
-#else
-   	if (mdata->fifo_expire[sync][dir]) {
-   		rq->fifo_time = jiffies + mdata->fifo_expire[sync][dir];
-   		list_add_tail(&rq->queuelist, &mdata->fifo_list[sync][dir]);
-   	}
-#endif
 }
 
 static struct request *
@@ -212,6 +210,7 @@ maple_dispatch_requests(struct request_queue *q, int force)
 	struct maple_data *mdata = maple_get_data(q);
 	struct request *rq = NULL;
 	int data_dir = READ;
+	static bool display_on = is_display_on();
 
 	/*
 	 * Retrieve any expired request after a batch of
@@ -222,16 +221,11 @@ maple_dispatch_requests(struct request_queue *q, int force)
 
 	/* Retrieve request */
 	if (!rq) {
-#ifdef CONFIG_POWERSUSPEND
 		/* Treat writes fairly while suspended, otherwise allow them to be starved */
-		if (!power_suspended && mdata->starved >= mdata->writes_starved)
+		if (display_on && mdata->starved >= mdata->writes_starved)
 			data_dir = WRITE;
-		else if (power_suspended && mdata->starved >= 1)
+		else if (!display_on && mdata->starved >= 1)
 			data_dir = WRITE;
-#else
-		if (mdata->starved >= mdata->writes_starved)
-			data_dir = WRITE;
-#endif
 
 		rq = maple_choose_request(mdata, data_dir);
 		if (!rq)
