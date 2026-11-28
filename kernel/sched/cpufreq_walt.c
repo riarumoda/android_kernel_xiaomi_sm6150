@@ -314,9 +314,8 @@ static unsigned long waltgov_get_util(struct waltgov_cpu *wg_cpu)
 
 #define NL_RATIO 75
 #define DEFAULT_HISPEED_LOAD 90
-#define DEFAULT_SILVER_RTG_BOOST_FREQ 1000000
-#define DEFAULT_GOLD_RTG_BOOST_FREQ 768000
-#define DEFAULT_PRIME_RTG_BOOST_FREQ 0
+#define DEFAULT_MIN_RTG_BOOST_PCT 55
+#define DEFAULT_MID_RTG_BOOST_PCT 30
 #define DEFAULT_TARGET_LOAD_THRESH 1024
 #define DEFAULT_TARGET_LOAD_SHIFT 4
 static inline void max_and_reason(unsigned long *cur_util, unsigned long boost_util,
@@ -1079,11 +1078,15 @@ static int waltgov_init(struct cpufreq_policy *policy)
 	tunables->target_load_shift = DEFAULT_TARGET_LOAD_SHIFT;
 
 	if (is_min_capacity_cpu(policy->cpu))
-		tunables->rtg_boost_freq = DEFAULT_SILVER_RTG_BOOST_FREQ;
+		tunables->rtg_boost_freq =
+			mult_frac(policy->cpuinfo.max_freq,
+				  DEFAULT_MIN_RTG_BOOST_PCT, 100);
 	else if (is_max_capacity_cpu(policy->cpu))
-		tunables->rtg_boost_freq = DEFAULT_PRIME_RTG_BOOST_FREQ;
+		tunables->rtg_boost_freq = 0;
 	else
-		tunables->rtg_boost_freq = DEFAULT_GOLD_RTG_BOOST_FREQ;
+		tunables->rtg_boost_freq =
+			mult_frac(policy->cpuinfo.max_freq,
+				  DEFAULT_MID_RTG_BOOST_PCT, 100);
 
 	policy->governor_data = wg_policy;
 	wg_policy->tunables = tunables;
